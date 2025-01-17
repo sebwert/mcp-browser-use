@@ -36,6 +36,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
     BaseMessage,
 )
+from langchain_openai import ChatOpenAI
+from langchain_openai.chat_models.base import _convert_message_to_dict
 from mcp_server_browser_use.utils.agent_state import AgentState
 from mcp_server_browser_use.agent.custom_massage_manager import CustomMassageManager
 from mcp_server_browser_use.agent.custom_views import (
@@ -163,41 +165,88 @@ class CustomAgent(Agent):
     @time_execution_async("--get_next_action")
     async def get_next_action(self, input_messages: list[BaseMessage]) -> AgentOutput:
         """Get next action from LLM based on current state"""
-        try:
-            structured_llm = self.llm.with_structured_output(
-                self.AgentOutput, include_raw=True
-            )
-            response: dict[str, Any] = await structured_llm.ainvoke(input_messages)  # type: ignore
+        logger.info("Getting next action from LLM")
+        logger.debug(f"Input messages: {input_messages}")
 
-            parsed: AgentOutput = response["parsed"]
+        try:
+            if isinstance(self.llm, ChatOpenAI):
+                logger.info("Using OpenAI chat model")
+                import instructor
+
+                client = instructor.from_openai(self.llm.root_async_client)
+                logger.debug(f"Using model: {self.llm.model_name}")
+                messages = [
+                    _convert_message_to_dict(message) for message in input_messages
+                ]
+                parsed = await client.chat.completions.create(
+                    messages=messages,
+                    model=self.llm.model_name,
+                    response_model=self.AgentOutput,
+                )
+                logger.debug(f"Raw OpenAI response: {parsed}")
+            else:
+                logger.info(f"Using non-OpenAI model: {type(self.llm).__name__}")
+                structured_llm = self.llm.with_structured_output(
+                    self.AgentOutput, include_raw=True
+                )
+                response: dict[str, Any] = await structured_llm.ainvoke(input_messages)  # type: ignore
+                logger.debug(f"Raw LLM response: {response}")
+                parsed: AgentOutput = response["parsed"]
+
             # cut the number of actions to max_actions_per_step
+            original_action_count = len(parsed.action)
             parsed.action = parsed.action[: self.max_actions_per_step]
+            if original_action_count > self.max_actions_per_step:
+                logger.warning(
+                    f"Truncated actions from {original_action_count} to {self.max_actions_per_step}"
+                )
+
             self._log_response(parsed)
             self.n_steps += 1
+            logger.info(f"Successfully got next action. Step count: {self.n_steps}")
 
             return parsed
         except Exception as e:
-            # If something goes wrong, try to invoke the LLM again without structured output,
-            # and Manually parse the response. Temporarily solution for DeepSeek
-            ret = self.llm.invoke(input_messages)
-            if isinstance(ret.content, list):
-                parsed_json = json.loads(
-                    ret.content[0].replace("```json", "").replace("```", "")
-                )
-            else:
-                parsed_json = json.loads(
-                    ret.content.replace("```json", "").replace("```", "")
-                )
-            parsed: AgentOutput = self.AgentOutput(**parsed_json)
-            if parsed is None:
-                raise ValueError(f"Could not parse response.")
+            logger.warning(f"Error getting structured output: {str(e)}")
+            logger.info("Attempting fallback to manual parsing")
 
-            # cut the number of actions to max_actions_per_step
-            parsed.action = parsed.action[: self.max_actions_per_step]
-            self._log_response(parsed)
-            self.n_steps += 1
+            try:
+                ret = self.llm.invoke(input_messages)
+                logger.debug(f"Raw fallback response: {ret}")
 
-            return parsed
+                if isinstance(ret.content, list):
+                    logger.debug("Parsing list content")
+                    parsed_json = json.loads(
+                        ret.content[0].replace("```json", "").replace("```", "")
+                    )
+                else:
+                    logger.debug("Parsing string content")
+                    parsed_json = json.loads(
+                        ret.content.replace("```json", "").replace("```", "")
+                    )
+
+                parsed: AgentOutput = self.AgentOutput(**parsed_json)
+                if parsed is None:
+                    raise ValueError(f"Could not parse response.")
+
+                # cut the number of actions to max_actions_per_step
+                original_action_count = len(parsed.action)
+                parsed.action = parsed.action[: self.max_actions_per_step]
+                if original_action_count > self.max_actions_per_step:
+                    logger.warning(
+                        f"Truncated actions from {original_action_count} to {self.max_actions_per_step}"
+                    )
+
+                self._log_response(parsed)
+                self.n_steps += 1
+                logger.info(
+                    f"Successfully got next action via fallback. Step count: {self.n_steps}"
+                )
+
+                return parsed
+            except Exception as parse_error:
+                logger.error(f"Fallback parsing failed: {str(parse_error)}")
+                raise
 
     @time_execution_async("--step")
     async def step(self, step_info: Optional[CustomAgentStepInfo] = None) -> None:

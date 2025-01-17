@@ -4,6 +4,10 @@ import sys
 import traceback
 from typing import List
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 from browser_use import BrowserConfig
 from browser_use.browser.context import BrowserContextConfig
 from fastmcp import FastMCP
@@ -21,7 +25,7 @@ _global_browser = None
 _global_browser_context = None
 _global_agent_state = AgentState()
 
-app = FastMCP(name="mcp_server_browser_use", version="0.1.0")
+app = FastMCP("mcp_server_browser_use")
 
 
 async def _safe_cleanup():
@@ -58,8 +62,8 @@ async def _safe_cleanup():
         _global_agent = None
 
 
-@app.tool("run-browser-agent")
-async def run_browser_agent(task: str, add_infos: str = "") -> List[TextContent]:
+@app.tool()
+async def run_browser_agent(task: str, add_infos: str = "") -> str:
     """Handle run-browser-agent tool calls."""
     global _global_agent, _global_browser, _global_browser_context, _global_agent_state
 
@@ -121,7 +125,9 @@ async def run_browser_agent(task: str, add_infos: str = "") -> List[TextContent]
 
         # Run agent
         history = await _global_agent.run(max_steps=max_steps)
-        final_result = history.final_result() or "No final result. Possibly incomplete."
+        final_result = (
+            history.final_result() or f"No final result. Possibly incomplete. {history}"
+        )
 
         return final_result
 
@@ -136,7 +142,9 @@ def main():
     try:
         app.run()
     except Exception as e:
-        print(f"Error running MCP server: {e}", file=sys.stderr)
+        print(
+            f"Error running MCP server: {e}\n{traceback.format_exc()}", file=sys.stderr
+        )
     finally:
         # Use a separate event loop to ensure cleanup
         try:
