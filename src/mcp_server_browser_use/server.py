@@ -6,6 +6,7 @@ import mcp.types as types
 from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 import mcp.server.stdio
+import os
 
 # browser-use imports
 from browser_use.browser.browser import Browser, BrowserConfig
@@ -13,12 +14,28 @@ from browser_use.agent.service import Agent
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
+# Environment variables
+CHROME_PATH = os.getenv(
+    "CHROME_PATH", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+)
+CHROME_USER_DATA = os.getenv("CHROME_USER_DATA")
+CHROME_DEBUGGING_PORT = int(os.getenv("CHROME_DEBUGGING_PORT", "9222"))
+CHROME_DEBUGGING_HOST = os.getenv("CHROME_DEBUGGING_HOST", "localhost")
+CHROME_PERSISTENT_SESSION = (
+    os.getenv("CHROME_PERSISTENT_SESSION", "true").lower() == "true"
+)
+RESOLUTION_WIDTH = int(os.getenv("RESOLUTION_WIDTH", "1920"))
+RESOLUTION_HEIGHT = int(os.getenv("RESOLUTION_HEIGHT", "1080"))
+OPENAI_ENDPOINT = os.getenv("OPENAI_ENDPOINT", "https://api.openai.com/v1")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 
 def safe_log(level: str, data: str) -> None:
     """Safely log messages, catching any exceptions to prevent crashes."""
     try:
         app.request_context.session.send_log_message(level=level, data=data)
     except Exception:
+        print(f"Error logging message: {data}")
         pass  # Silently handle any logging failures
 
 
@@ -264,11 +281,13 @@ async def call_tool_handler(
     try:
         if name == "browser_launch":
             safe_log("info", "Launching browser with configuration")
-            headless = arguments.get("headless", True)
+            headless = arguments.get("headless", False)
             disable_security = arguments.get("disableSecurity", False)
-            window_size = arguments.get("windowSize", {"width": 1280, "height": 800})
-            chrome_path = arguments.get("chromePath", "")
-            persist_session = arguments.get("persistSession", False)
+            window_size = arguments.get(
+                "windowSize", {"width": RESOLUTION_WIDTH, "height": RESOLUTION_HEIGHT}
+            )
+            chrome_path = arguments.get("chromePath", CHROME_PATH)
+            persist_session = arguments.get("persistSession", CHROME_PERSISTENT_SESSION)
             load_timeouts = arguments.get("loadTimeouts", {"min": 1, "max": 10})
 
             safe_log(
@@ -283,7 +302,12 @@ async def call_tool_handler(
                     headless=headless,
                     disable_security=disable_security,
                     chrome_instance_path=chrome_path if chrome_path else None,
-                    new_context_config=None,
+                    new_context_config={
+                        "viewport": window_size,
+                        "user_data_dir": CHROME_USER_DATA if persist_session else None,
+                        "debugging_port": CHROME_DEBUGGING_PORT,
+                        "debugging_host": CHROME_DEBUGGING_HOST,
+                    },
                 )
             )
             msg = "Browser launched/attached successfully"
@@ -310,7 +334,7 @@ async def call_tool_handler(
             if llm_config:
                 safe_log("info", "Configuring LLM for task execution")
                 provider = llm_config.get("provider", "openai")
-                model = llm_config.get("model", "gpt-3.5-turbo")
+                model = llm_config.get("model", "gpt-4o")
                 api_key = llm_config.get("apiKey", "")
                 base_url = llm_config.get("baseUrl", "")
                 api_version = llm_config.get("apiVersion", "")
@@ -333,8 +357,8 @@ async def call_tool_handler(
                 raise ValueError(error_msg)
 
             agent = Agent(
-                task=description,
-                steps=steps,
+                task=f"{description}\n\nSteps:\n"
+                + "\n".join(f"- {step}" for step in steps),
                 browser=state.browser,
                 llm=state.llm,
                 validate_output=validation,
@@ -374,8 +398,8 @@ async def call_tool_handler(
             safe_log("info", "Configuring LLM")
             provider = arguments.get("provider", "openai")
             model = arguments.get("model", "gpt-3.5-turbo")
-            api_key = arguments.get("apiKey", "")
-            base_url = arguments.get("baseUrl", "")
+            api_key = arguments.get("apiKey", OPENAI_API_KEY)
+            base_url = arguments.get("baseUrl", OPENAI_ENDPOINT)
             api_version = arguments.get("apiVersion", "")
 
             safe_log(
