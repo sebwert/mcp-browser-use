@@ -1,25 +1,18 @@
-# Use Python 3.10 slim as a base
-FROM python:3.10-slim
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 
-WORKDIR /app
-
-# Install system dependencies for browser-use (e.g. Chrome dependencies if needed).
-# For a minimal Docker image, we may rely on the host system or a separate container
-# to run an actual Chrome or Chromium instance. Adjust as needed if you want a fully
-# contained browser environment.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    curl \
-    unzip \
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
-COPY . /app
+# Copy the project into the image
+ADD . /app
 
-# Install python dependencies, including browser-use
-RUN pip install --no-cache-dir .
+# Sync the project into a new environment, using the frozen lockfile
+WORKDIR /app
+RUN uv sync --frozen
 
-# Expose the default port
-EXPOSE 8031
+# Default port for MCP server
+EXPOSE 8000
 
-CMD ["python", "-m", "my_mcp_server.main"]
+CMD ["uv", "run", "mcp_server_browser_use"]

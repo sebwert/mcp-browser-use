@@ -1,4 +1,4 @@
-# browser MCP server
+# browser-use MCP server
 
 MCP server for browser-use
 
@@ -6,27 +6,18 @@ MCP server for browser-use
 
 ### Resources
 
-The server implements a simple note storage system with:
-- Custom note:// URI scheme for accessing individual notes
-- Each note resource has a name, description and text/plain mimetype
+The server implements a browser automation system with:
+- Integration with browser-use library
+- Custom browser automation capabilities
+- Agent-based interaction system
 
-### Prompts
+### Requirements
 
-The server provides a single prompt:
-- summarize-notes: Creates summaries of all stored notes
-  - Optional "style" argument to control detail level (brief/detailed)
-  - Generates prompt combining all current notes with style preference
-
-### Tools
-
-The server implements one tool:
-- add-note: Adds a new note to the server
-  - Takes "name" and "content" as required string arguments
-  - Updates server state and notifies clients of resource changes
-
-## Configuration
-
-[TODO: Add configuration details specific to your implementation]
+- Python 3.11 or higher
+- Dependencies listed in pyproject.toml including:
+  - browser-use==0.1.19
+  - langchain and related packages
+  - OpenAI API access
 
 ## Quickstart
 
@@ -38,34 +29,36 @@ On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 <details>
-  <summary>Development/Unpublished Servers Configuration</summary>
-  ```
-  "mcpServers": {
-    "browser": {
+  <summary>Development Configuration</summary>
+
+```json
+"mcpServers": {
+    "mcp_server_browser_use": {
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/igortarasenko/Projects/browser-use-web-ui/browser",
+        "/path/to/mcp-server-browser-use",
         "run",
-        "browser"
+        "mcp_server_browser_use"
       ]
     }
-  }
-  ```
+}
+```
 </details>
 
 <details>
-  <summary>Published Servers Configuration</summary>
-  ```
-  "mcpServers": {
+  <summary>Published Configuration</summary>
+
+```json
+"mcpServers": {
     "browser": {
       "command": "uvx",
       "args": [
         "browser"
       ]
     }
-  }
-  ```
+}
+```
 </details>
 
 ## Development
@@ -84,8 +77,6 @@ uv sync
 uv build
 ```
 
-This will create source and wheel distributions in the `dist/` directory.
-
 3. Publish to PyPI:
 ```bash
 uv publish
@@ -97,15 +88,10 @@ Note: You'll need to set PyPI credentials via environment variables or command f
 
 ### Debugging
 
-Since MCP servers run over stdio, debugging can be challenging. For the best debugging
-experience, we strongly recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
-
-
-You can launch the MCP Inspector via [`npm`](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) with this command:
+For debugging, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
-npx @modelcontextprotocol/inspector uv --directory /Users/igortarasenko/Projects/browser-use-web-ui/browser run browser
+npx @modelcontextprotocol/inspector uv --directory /path/to/project run mcp_server_browser_use
 ```
 
-
-Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
+The Inspector will display a URL for the debugging interface.
