@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2025/1/2
+# @Author  : wenshao
+# @ProjectName: browser-use-webui
+# @FileName: custom_prompts.py
+
 from typing import List, Optional
 
 from browser_use.agent.prompts import SystemPrompt
@@ -33,7 +39,7 @@ class CustomSystemPrompt(SystemPrompt):
          ]
        }
 
-    2. ACTIONS: You can specify multiple actions to be executed in sequence.
+    2. ACTIONS: You can specify multiple actions to be executed in sequence. 
 
        Common action sequences:
        - Form filling: [
@@ -77,13 +83,13 @@ class CustomSystemPrompt(SystemPrompt):
        - If you fill an input field and your action sequence is interrupted, most often a list with suggestions poped up under the field and you need to first select the right element from the suggestion list.
 
     8. ACTION SEQUENCING:
-       - Actions are executed in the order they appear in the list
+       - Actions are executed in the order they appear in the list 
        - Each action should logically follow from the previous one
        - If the page changes after an action, the sequence is interrupted and you get the new state.
        - If content only disappears the sequence continues.
        - Only provide the action sequence until you think the page will change.
        - Try to be efficient, e.g. fill forms at once, or chain actions where nothing changes on the page like saving, extracting, checkboxes...
-       - only use multiple actions if it makes sense.
+       - only use multiple actions if it makes sense. 
     """
         text += f"   - use maximum {self.max_actions_per_step} actions per sequence"
         return text
@@ -142,12 +148,12 @@ class CustomSystemPrompt(SystemPrompt):
 
 class CustomAgentMessagePrompt:
     def __init__(
-        self,
-        state: BrowserState,
-        result: Optional[List[ActionResult]] = None,
-        include_attributes: list[str] = [],
-        max_error_length: int = 400,
-        step_info: Optional[CustomAgentStepInfo] = None,
+            self,
+            state: BrowserState,
+            result: Optional[List[ActionResult]] = None,
+            include_attributes: list[str] = [],
+            max_error_length: int = 400,
+            step_info: Optional[CustomAgentStepInfo] = None,
     ):
         self.state = state
         self.result = result
@@ -158,11 +164,11 @@ class CustomAgentMessagePrompt:
     def get_user_message(self) -> HumanMessage:
         state_description = f"""
     1. Task: {self.step_info.task}
-    2. Hints(Optional):
+    2. Hints(Optional): 
     {self.step_info.add_infos}
-    3. Memory:
+    3. Memory: 
     {self.step_info.memory}
-    4. Task Progress:
+    4. Task Progress: 
     {self.step_info.task_progress}
     5. Current url: {self.state.url}
     6. Available tabs:
@@ -177,7 +183,7 @@ class CustomAgentMessagePrompt:
                     state_description += f"\nResult of action {i + 1}/{len(self.result)}: {result.extracted_content}"
                 if result.error:
                     # only use last 300 characters of error
-                    error = result.error[-self.max_error_length :]
+                    error = result.error[-self.max_error_length:]
                     state_description += (
                         f"\nError of action {i + 1}/{len(self.result)}: ...{error}"
                     )

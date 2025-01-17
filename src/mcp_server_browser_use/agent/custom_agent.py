@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2025/1/2
+# @Author  : wenshao
+# @ProjectName: browser-use-webui
+# @FileName: custom_agent.py
+
 import json
 import logging
 import pdb
@@ -39,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 class CustomAgent(Agent):
+
     def __init__(
         self,
         task: str,

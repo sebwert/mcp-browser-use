@@ -1,53 +1,111 @@
-# My MCP Server (Browser-Use Edition)
+# browser MCP server
 
-This repository provides a **Model Context Protocol (MCP)** server that integrates the [browser-use](https://github.com/agi-ant/browser-use) Python library. It allows programmatic browser control and web automation via MCP clients such as Claude Desktop.
+MCP server for browser-use
 
-## Features
+## Components
 
-1. **Resource**: Exposes a dynamic resource that can provide a summary of recent browser actions.
-2. **Prompts**: Offers a prompt named `mcp-demo` that guides users through launching a browser, navigating pages, and performing tasks.
-3. **Tools**: Implements core browser-focused tools, including:
-   - `browser_launch` to start or attach to a browser session
-   - `task_execute` to run multi-step tasks with optional LLM guidance
-   - `session_manage` to manage session persistence
-   - and additional convenience tools: `llm_configure`, `history_export`, `task_validate`, and `vision_toggle`
+### Resources
 
-## Requirements
+The server implements a simple note storage system with:
+- Custom note:// URI scheme for accessing individual notes
+- Each note resource has a name, description and text/plain mimetype
 
-- Python 3.10+
-- The `browser-use` library for controlling the browser
-- `mcp` library for the Model Context Protocol
+### Prompts
 
-## Installation
+The server provides a single prompt:
+- summarize-notes: Creates summaries of all stored notes
+  - Optional "style" argument to control detail level (brief/detailed)
+  - Generates prompt combining all current notes with style preference
 
+### Tools
+
+The server implements one tool:
+- add-note: Adds a new note to the server
+  - Takes "name" and "content" as required string arguments
+  - Updates server state and notifies clients of resource changes
+
+## Configuration
+
+[TODO: Add configuration details specific to your implementation]
+
+## Quickstart
+
+### Install
+
+#### Claude Desktop
+
+On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
+On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
+
+<details>
+  <summary>Development/Unpublished Servers Configuration</summary>
+  ```
+  "mcpServers": {
+    "browser": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/igortarasenko/Projects/browser-use-web-ui/browser",
+        "run",
+        "browser"
+      ]
+    }
+  }
+  ```
+</details>
+
+<details>
+  <summary>Published Servers Configuration</summary>
+  ```
+  "mcpServers": {
+    "browser": {
+      "command": "uvx",
+      "args": [
+        "browser"
+      ]
+    }
+  }
+  ```
+</details>
+
+## Development
+
+### Building and Publishing
+
+To prepare the package for distribution:
+
+1. Sync dependencies and update lockfile:
 ```bash
-# From the project root directory
-pip install .
+uv sync
 ```
 
-## Usage (Local)
-
+2. Build package distributions:
 ```bash
-# Using uvicorn
-uvicorn my_mcp_server.main:app --port 8031 --host 127.0.0.1
-# or
-python -m my_mcp_server.main
+uv build
 ```
 
-After running, you can connect an MCP client via SSE or stdio if you integrate with a suitable front end (like Claude Desktop or your own custom client).
+This will create source and wheel distributions in the `dist/` directory.
 
-## Docker
-
+3. Publish to PyPI:
 ```bash
-docker build -t my_mcp_server .
-docker run --rm -p 8031:8031 my_mcp_server
+uv publish
 ```
 
-## Notes
+Note: You'll need to set PyPI credentials via environment variables or command flags:
+- Token: `--token` or `UV_PUBLISH_TOKEN`
+- Or username/password: `--username`/`UV_PUBLISH_USERNAME` and `--password`/`UV_PUBLISH_PASSWORD`
 
-- For local development, ensure you have a running Chrome/Chromium if you wish to do real browser automation.
-- This server can still function in "headless" mode if configured. See the `browser_launch` tool usage.
+### Debugging
 
-## License
+Since MCP servers run over stdio, debugging can be challenging. For the best debugging
+experience, we strongly recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
 
-This project is licensed under the MIT License.
+
+You can launch the MCP Inspector via [`npm`](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) with this command:
+
+```bash
+npx @modelcontextprotocol/inspector uv --directory /Users/igortarasenko/Projects/browser-use-web-ui/browser run browser
+```
+
+
+Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.

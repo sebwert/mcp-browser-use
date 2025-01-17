@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2025/1/2
+# @Author  : wenshao
+# @ProjectName: browser-use-webui
+# @FileName: custom_massage_manager.py
+
 from __future__ import annotations
 
 import logging
@@ -9,7 +15,10 @@ from browser_use.agent.prompts import SystemPrompt
 from browser_use.agent.views import ActionResult, AgentStepInfo
 from browser_use.browser.views import BrowserState
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage
+)
 
 from .custom_prompts import CustomAgentMessagePrompt
 
@@ -18,18 +27,18 @@ logger = logging.getLogger(__name__)
 
 class CustomMassageManager(MessageManager):
     def __init__(
-        self,
-        llm: BaseChatModel,
-        task: str,
-        action_descriptions: str,
-        system_prompt_class: Type[SystemPrompt],
-        max_input_tokens: int = 128000,
-        estimated_tokens_per_character: int = 3,
-        image_tokens: int = 800,
-        include_attributes: list[str] = [],
-        max_error_length: int = 400,
-        max_actions_per_step: int = 10,
-        tool_call_in_content: bool = False,
+            self,
+            llm: BaseChatModel,
+            task: str,
+            action_descriptions: str,
+            system_prompt_class: Type[SystemPrompt],
+            max_input_tokens: int = 128000,
+            estimated_tokens_per_character: int = 3,
+            image_tokens: int = 800,
+            include_attributes: list[str] = [],
+            max_error_length: int = 400,
+            max_actions_per_step: int = 10,
+            tool_call_in_content: bool = False,
     ):
         super().__init__(
             llm=llm,
@@ -50,40 +59,40 @@ class CustomMassageManager(MessageManager):
         self._add_message_with_tokens(self.system_prompt)
         tool_calls = [
             {
-                "name": "CustomAgentOutput",
-                "args": {
-                    "current_state": {
-                        "prev_action_evaluation": "Unknown - No previous actions to evaluate.",
-                        "important_contents": "",
-                        "completed_contents": "",
-                        "thought": "Now Google is open. Need to type OpenAI to search.",
-                        "summary": "Type OpenAI to search.",
+                'name': 'CustomAgentOutput',
+                'args': {
+                    'current_state': {
+                        'prev_action_evaluation': 'Unknown - No previous actions to evaluate.',
+                        'important_contents': '',
+                        'completed_contents': '',
+                        'thought': 'Now Google is open. Need to type OpenAI to search.',
+                        'summary': 'Type OpenAI to search.',
                     },
-                    "action": [],
+                    'action': [],
                 },
-                "id": "",
-                "type": "tool_call",
+                'id': '',
+                'type': 'tool_call',
             }
         ]
         if self.tool_call_in_content:
             # openai throws error if tool_calls are not responded -> move to content
             example_tool_call = AIMessage(
-                content=f"{tool_calls}",
+                content=f'{tool_calls}',
                 tool_calls=[],
             )
         else:
             example_tool_call = AIMessage(
-                content=f"",
+                content=f'',
                 tool_calls=tool_calls,
             )
 
         self._add_message_with_tokens(example_tool_call)
 
     def add_state_message(
-        self,
-        state: BrowserState,
-        result: Optional[List[ActionResult]] = None,
-        step_info: Optional[AgentStepInfo] = None,
+            self,
+            state: BrowserState,
+            result: Optional[List[ActionResult]] = None,
+            step_info: Optional[AgentStepInfo] = None,
     ) -> None:
         """Add browser state as human message"""
 
@@ -96,7 +105,7 @@ class CustomMassageManager(MessageManager):
                         self._add_message_with_tokens(msg)
                     if r.error:
                         msg = HumanMessage(
-                            content=str(r.error)[-self.max_error_length :]
+                            content=str(r.error)[-self.max_error_length:]
                         )
                         self._add_message_with_tokens(msg)
                     result = None  # if result in history, we dont want to add it again

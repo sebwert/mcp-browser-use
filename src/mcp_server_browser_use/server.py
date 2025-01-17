@@ -1,274 +1,237 @@
-import asyncio
-from typing import Any, Dict, List, Optional
-from contextlib import closing
-from pydantic import AnyUrl
-import mcp.types as types
-from mcp.server import Server, NotificationOptions
-from mcp.server.models import InitializationOptions
-import mcp.server.stdio
 import os
+import traceback
 
-# browser-use imports
-from browser_use.browser.browser import BrowserConfig
-from browser_use.browser.context import BrowserContextConfig, BrowserContextWindowSize
-from browser_use.agent.service import Agent
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
-from .custom_browser import CustomBrowser
+import mcp.server.stdio
+import mcp.types as types
+from browser_use import BrowserConfig
+from browser_use.browser.context import BrowserContextConfig
+from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
+from pydantic import AnyUrl
+
+# Import the custom agent & relevant code
 from .agent.custom_agent import CustomAgent
+from .browser.custom_browser import CustomBrowser
+from .controller.custom_controller import CustomController
+from .utils import utils
+from .utils.agent_state import AgentState
 
-# Environment variables with defaults
-CHROME_PATH = os.getenv(
-    "CHROME_PATH", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-)
-CHROME_USER_DATA = os.getenv("CHROME_USER_DATA")
-CHROME_DEBUGGING_PORT = int(os.getenv("CHROME_DEBUGGING_PORT", "9222"))
-CHROME_DEBUGGING_HOST = os.getenv("CHROME_DEBUGGING_HOST", "localhost")
-CHROME_PERSISTENT_SESSION = (
-    os.getenv("CHROME_PERSISTENT_SESSION", "true").lower() == "true"
-)
-RESOLUTION_WIDTH = int(os.getenv("RESOLUTION_WIDTH", "1920"))
-RESOLUTION_HEIGHT = int(os.getenv("RESOLUTION_HEIGHT", "1080"))
-OPENAI_ENDPOINT = os.getenv("OPENAI_ENDPOINT", "https://api.openai.com/v1")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-SAVE_TRACES_PATH = os.getenv("SAVE_TRACES_PATH", "./tmp/traces")
-SAVE_RECORDINGS_PATH = os.getenv("SAVE_RECORDINGS_PATH", "./tmp/record_videos")
-DEFAULT_MAX_STEPS = int(os.getenv("DEFAULT_MAX_STEPS", "20"))
-DEFAULT_ACTIONS_PER_STEP = int(os.getenv("DEFAULT_ACTIONS_PER_STEP", "5"))
+# We will maintain global references for a single "running agent" approach
+# If you want more concurrency, you'd track sessions in a dictionary or similar.
+_global_agent = None
+_global_browser = None
+_global_browser_context = None
+_global_agent_state = AgentState()
 
-def safe_log(level: str, data: str) -> None:
-    """Safely log messages, catching any exceptions to prevent crashes."""
-    try:
-        app.request_context.session.send_log_message(level=level, data=data)
-    except Exception:
-        print(f"Error logging message: {data}")
-        pass
-
-class BrowserUseServerState:
-    """Manages server state including browser, context, and history."""
-    def __init__(self):
-        self.browser: Optional[CustomBrowser] = None
-        self.browser_context: Optional[Any] = None
-        self.llm: Optional[ChatOpenAI] = None
-        self.history: List[Dict[str, Any]] = []
-        self.recording_enabled: bool = False
-        self.tracing_enabled: bool = False
-        self.vision_enabled: bool = False
-
-    def add_history_entry(self, entry_type: str, details: Dict[str, Any]) -> None:
-        """Add a timestamped entry to history."""
-        entry = {
-            "timestamp": asyncio.get_event_loop().time(),
-            "type": entry_type,
-            **details,
-        }
-        self.history.append(entry)
-        safe_log("debug", f"Added history entry: {entry}")
-
-    async def cleanup(self) -> None:
-        """Cleanup resources when shutting down."""
-        if self.browser_context:
-            await self.browser_context.close()
-            self.browser_context = None
-        if self.browser:
-            await self.browser.close()
-            self.browser = None
-        self.llm = None
-
-    async def setup_browser_context(self) -> None:
-        """Setup or refresh browser context with current settings."""
-        if self.browser_context:
-            await self.browser_context.close()
-
-        if not self.browser:
-            return
-
-        self.browser_context = await self.browser.new_context(
-            config=BrowserContextConfig(
-                trace_path=SAVE_TRACES_PATH if self.tracing_enabled else None,
-                save_recording_path=(
-                    SAVE_RECORDINGS_PATH if self.recording_enabled else None
-                ),
-                no_viewport=False,
-                browser_window_size=BrowserContextWindowSize(
-                    width=RESOLUTION_WIDTH, height=RESOLUTION_HEIGHT
-                ),
-            )
-        )
+# Create the MCP server instance
+server = Server("browser-automation")
 
 
-app = Server("browser-use-mcp-server")
-state = BrowserUseServerState()
+@server.list_resources()
+async def handle_list_resources() -> list[types.Resource]:
+    """
+    Return an empty list of resources by default.
+    (In a more advanced scenario, you could list "browser" as a resource, or
+     track each session as a resource.)
+    """
+    return []
 
-@app.list_tools()
-async def list_tools_handler() -> List[types.Tool]:
-    """Provide the minimal set of required tools."""
+
+@server.read_resource()
+async def handle_read_resource(uri: AnyUrl) -> str:
+    """
+    Not used in this minimal example. If your design includes a resource representation
+    for the browser or agent state, you could retrieve it here.
+    """
+    raise ValueError("No resource reading available in this server.")
+
+
+@server.list_prompts()
+async def handle_list_prompts() -> list[types.Prompt]:
+    """
+    Not used. In some MCP flows, you might define advanced "prompts" for the agent.
+    We'll rely on 'call_tool' for launching tasks.
+    """
+    return []
+
+
+@server.get_prompt()
+async def handle_get_prompt(
+    name: str, arguments: dict[str, str] | None
+) -> types.GetPromptResult:
+    """
+    Not used. We won't implement dynamic prompt composition.
+    If needed, you can adapt logic from the existing code.
+    """
+    raise ValueError("No prompts are defined for this server.")
+
+
+@server.list_tools()
+async def handle_list_tools() -> list[types.Tool]:
+    """
+    We provide two main tools:
+    1) run-browser-agent: Start the browser (optionally persistent) and run a single agent "task"
+    2) stop-browser-agent: Request the agent to stop & close the browser
+    """
     return [
         types.Tool(
-            name="browser_launch",
-            description="Launch or attach to a browser session",
+            name="run-browser-agent",
+            description="Launch or reuse a browser and run a custom agent with a specified task (plus optional info). Returns final result or any error info.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "headless": {"type": "boolean"},
-                    "disableSecurity": {"type": "boolean"},
+                    "task": {"type": "string"},
+                    "add_infos": {"type": "string"},
                 },
+                "required": ["task"],
             },
         ),
         types.Tool(
-            name="task_execute",
-            description="Execute a task in the browser with LLM guidance",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "description": {"type": "string"},
-                    "maxSteps": {"type": "number"},
-                    "visionEnabled": {"type": "boolean"},
-                },
-            },
-        ),
-        types.Tool(
-            name="session_manage",
-            description="Configure recording and tracing for the session",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "enableRecording": {"type": "boolean"},
-                    "enableTracing": {"type": "boolean"},
-                },
-            },
+            name="stop-browser-agent",
+            description="Stop the currently running agent and close the browser context if open. Frees resources.",
+            inputSchema={"type": "object", "properties": {}},
         ),
     ]
 
-@app.call_tool()
-async def call_tool_handler(
-    name: str, arguments: Dict[str, Any]
-) -> List[types.TextContent]:
-    """Handle tool calls with proper state management."""
-    safe_log("info", f"Handling tool call: {name} with arguments: {arguments}")
-    try:
-        if name == "browser_launch":
-            headless = arguments.get("headless", False)
-            disable_security = arguments.get("disableSecurity", False)
 
-            # Cleanup existing browser if any
-            await state.cleanup()
+@server.call_tool()
+async def handle_call_tool(
+    name: str, arguments: dict | None
+) -> list[types.TextContent]:
+    """
+    Handle tool calls from an MCP client.
+    For run-browser-agent, launch the custom agent with requested config.
+    For stop-browser-agent, request the agent to stop and close the browser.
+    """
+    global _global_agent, _global_browser, _global_browser_context, _global_agent_state
 
-            state.browser = CustomBrowser(
-                config=BrowserConfig(
-                    headless=headless,
-                    chrome_instance_path=CHROME_PATH,
-                    disable_security=disable_security,
-                    extra_chromium_args=[
-                        f"--window-size={RESOLUTION_WIDTH},{RESOLUTION_HEIGHT}"
-                    ],
+    if name == "run-browser-agent":
+        # Extract arguments
+        task = arguments.get("task", "")
+        add_infos = arguments.get("add_infos", "")
+        model_provider = os.getenv("MCP_MODEL_PROVIDER", "openai")
+        model_name = os.getenv("MCP_MODEL_NAME", "gpt-4")
+        temperature = float(os.getenv("MCP_TEMPERATURE", "0.7"))
+        max_steps = int(os.getenv("MCP_MAX_STEPS", "15"))
+        use_vision = os.getenv("MCP_USE_VISION", "true").lower() == "true"
+        max_actions_per_step = int(os.getenv("MCP_MAX_ACTIONS_PER_STEP", "5"))
+        tool_call_in_content = (
+            os.getenv("MCP_TOOL_CALL_IN_CONTENT", "true").lower() == "true"
+        )
+
+        try:
+            # Clear any previous agent stop signals
+            _global_agent_state.clear_stop()
+
+            # Prepare LLM
+            llm = utils.get_llm_model(
+                provider=model_provider, model_name=model_name, temperature=temperature
+            )
+
+            # Decide if we want persistent session (from env)
+            # or ephemeral. If CHROME_PERSISTENT_SESSION is "true" or "True", keep it
+            persistent_session = (
+                os.getenv("CHROME_PERSISTENT_SESSION", "").lower() == "true"
+            )
+            chrome_path = os.getenv("CHROME_PATH", None)
+            if chrome_path == "":
+                chrome_path = None
+            # user data dir from env
+            user_data_dir = os.getenv("CHROME_USER_DATA", None)
+
+            # Create the (or reuse) browser
+            if not _global_browser:
+                _global_browser = CustomBrowser(
+                    config=BrowserConfig(
+                        headless=False,
+                        disable_security=False,
+                        chrome_instance_path=chrome_path,
+                        extra_chromium_args=[],
+                        wss_url=None,
+                        proxy=None,
+                    )
                 )
-            )
-
-            await state.setup_browser_context()
-
-            msg = "Browser launched successfully"
-            state.add_history_entry(
-                "browser_launch",
-                {"headless": headless, "disable_security": disable_security},
-            )
-            return [types.TextContent(type="text", text=msg)]
-
-        elif name == "task_execute":
-            if not state.browser or not state.browser_context:
-                raise ValueError("Browser not initialized. Call browser_launch first.")
-
-            description = arguments.get("description", "")
-            max_steps = arguments.get("maxSteps", DEFAULT_MAX_STEPS)
-            vision_enabled = arguments.get("visionEnabled", False)
-
-            # Initialize LLM if not already done
-            if not state.llm:
-                state.llm = ChatOpenAI(
-                    api_key=SecretStr(OPENAI_API_KEY),
-                    base_url=OPENAI_ENDPOINT,
-                    model="gpt-4",
+            if not _global_browser_context:
+                _global_browser_context = await _global_browser.new_context(
+                    config=BrowserContextConfig(
+                        trace_path=None, save_recording_path=None, no_viewport=False
+                    )
                 )
 
-            agent = CustomAgent(
-                task=description,
-                llm=state.llm,
-                use_vision=vision_enabled,
-                browser=state.browser,
-                browser_context=state.browser_context,
-                max_actions_per_step=DEFAULT_ACTIONS_PER_STEP,
-                tool_call_in_content=True,
+            # Create a custom controller
+            controller = CustomController()
+
+            # Instantiate the custom agent
+            _global_agent = CustomAgent(
+                task=task,
+                add_infos=add_infos,
+                use_vision=use_vision,
+                llm=llm,
+                browser=_global_browser,
+                browser_context=_global_browser_context,
+                controller=controller,
+                max_actions_per_step=max_actions_per_step,
+                tool_call_in_content=tool_call_in_content,
+                agent_state=_global_agent_state,
             )
 
-            safe_log("info", f"Starting task execution with max_steps={max_steps}")
-            result = await agent.run(max_steps=max_steps)
+            # Run the agent
+            history = await _global_agent.run(max_steps=max_steps)
 
-            state.add_history_entry(
-                "task_execute",
-                {
-                    "description": description,
-                    "max_steps": max_steps,
-                    "vision_enabled": vision_enabled,
-                    "result": str(result),
-                },
+            # Provide final result to the client
+            final_result = history.final_result()
+            if final_result is None:
+                final_result = "No final result. Possibly incomplete."
+
+            return [types.TextContent(type="text", text=final_result)]
+
+        except Exception as e:
+            error_message = (
+                f"run-browser-agent error: {str(e)}\n{traceback.format_exc()}"
             )
+            return [types.TextContent(type="text", text=error_message)]
 
-            return [types.TextContent(type="text", text=str(result))]
-
-        elif name == "session_manage":
-            enable_recording = arguments.get("enableRecording", False)
-            enable_tracing = arguments.get("enableTracing", False)
-
-            state.recording_enabled = enable_recording
-            state.tracing_enabled = enable_tracing
-
-            # Refresh browser context with new settings
-            if state.browser:
-                await state.setup_browser_context()
-
-            state.add_history_entry(
-                "session_manage",
-                {
-                    "recording_enabled": enable_recording,
-                    "tracing_enabled": enable_tracing,
-                },
-            )
-
+    elif name == "stop-browser-agent":
+        # Stop agent and close browser
+        try:
+            _global_agent_state.request_stop()
+            if _global_browser_context:
+                await _global_browser_context.close()
+                _global_browser_context = None
+            if _global_browser:
+                await _global_browser.close()
+                _global_browser = None
+            _global_agent = None
             return [
                 types.TextContent(
-                    type="text",
-                    text=f"Session updated: recording={'enabled' if enable_recording else 'disabled'}, "
-                    f"tracing={'enabled' if enable_tracing else 'disabled'}",
+                    type="text", text="Agent and browser stopped successfully."
                 )
             ]
-
-        else:
-            raise ValueError(f"Unknown tool name: {name}")
-
-    except Exception as e:
-        error_msg = f"Error in {name}: {str(e)}"
-        safe_log("error", error_msg)
-        state.add_history_entry("error", {"tool": name, "error": str(e)})
-        return [types.TextContent(type="text", text=error_msg)]
-
-async def run_server_stdio():
-    """Run the server using stdio transport."""
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        try:
-            await app.run(
-                read_stream,
-                write_stream,
-                InitializationOptions(
-                    server_name="browser-use-mcp",
-                    server_version="0.1.0",
-                    capabilities=app.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={},
-                    ),
-                ),
+        except Exception as e:
+            error_message = (
+                f"stop-browser-agent error: {str(e)}\n{traceback.format_exc()}"
             )
-        finally:
-            await state.cleanup()
+            return [types.TextContent(type="text", text=error_message)]
 
-if __name__ == "__main__":
-    asyncio.run(run_server_stdio())
+    else:
+        raise ValueError(f"Unknown tool: {name}")
+
+
+async def main():
+    """
+    Main entry point.
+    Launches the MCP server on stdin/stdout or whichever streams are provided.
+    """
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="browser-automation",
+                server_version="0.1.0",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
