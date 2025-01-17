@@ -36,10 +36,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
     BaseMessage,
 )
-from ..utils.agent_state import AgentState
-
-from .custom_massage_manager import CustomMassageManager
-from .custom_views import CustomAgentOutput, CustomAgentStepInfo
+from mcp_server_browser_use.utils.agent_state import AgentState
+from mcp_server_browser_use.agent.custom_massage_manager import CustomMassageManager
+from mcp_server_browser_use.agent.custom_views import (
+    CustomAgentOutput,
+    CustomAgentStepInfo,
+)
 
 logger = logging.getLogger(__name__)
 

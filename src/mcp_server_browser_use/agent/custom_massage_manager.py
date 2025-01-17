@@ -20,7 +20,7 @@ from langchain_core.messages import (
     AIMessage
 )
 
-from .custom_prompts import CustomAgentMessagePrompt
+from mcp_server_browser_use.agent.custom_prompts import CustomAgentMessagePrompt
 
 logger = logging.getLogger(__name__)
 

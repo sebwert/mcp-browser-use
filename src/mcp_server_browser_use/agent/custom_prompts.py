@@ -11,7 +11,7 @@ from browser_use.agent.views import ActionResult
 from browser_use.browser.views import BrowserState
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from .custom_views import CustomAgentStepInfo
+from mcp_server_browser_use.agent.custom_views import CustomAgentStepInfo
 
 
 class CustomSystemPrompt(SystemPrompt):
@@ -39,7 +39,7 @@ class CustomSystemPrompt(SystemPrompt):
          ]
        }
 
-    2. ACTIONS: You can specify multiple actions to be executed in sequence. 
+    2. ACTIONS: You can specify multiple actions to be executed in sequence.
 
        Common action sequences:
        - Form filling: [
@@ -83,13 +83,13 @@ class CustomSystemPrompt(SystemPrompt):
        - If you fill an input field and your action sequence is interrupted, most often a list with suggestions poped up under the field and you need to first select the right element from the suggestion list.
 
     8. ACTION SEQUENCING:
-       - Actions are executed in the order they appear in the list 
+       - Actions are executed in the order they appear in the list
        - Each action should logically follow from the previous one
        - If the page changes after an action, the sequence is interrupted and you get the new state.
        - If content only disappears the sequence continues.
        - Only provide the action sequence until you think the page will change.
        - Try to be efficient, e.g. fill forms at once, or chain actions where nothing changes on the page like saving, extracting, checkboxes...
-       - only use multiple actions if it makes sense. 
+       - only use multiple actions if it makes sense.
     """
         text += f"   - use maximum {self.max_actions_per_step} actions per sequence"
         return text
@@ -164,11 +164,11 @@ class CustomAgentMessagePrompt:
     def get_user_message(self) -> HumanMessage:
         state_description = f"""
     1. Task: {self.step_info.task}
-    2. Hints(Optional): 
+    2. Hints(Optional):
     {self.step_info.add_infos}
-    3. Memory: 
+    3. Memory:
     {self.step_info.memory}
-    4. Task Progress: 
+    4. Task Progress:
     {self.step_info.task_progress}
     5. Current url: {self.state.url}
     6. Available tabs:

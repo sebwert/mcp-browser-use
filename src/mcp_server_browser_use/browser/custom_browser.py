@@ -19,8 +19,8 @@ from browser_use.browser.context import BrowserContext, BrowserContextConfig
 from playwright.async_api import BrowserContext as PlaywrightBrowserContext
 import logging
 
-from .config import BrowserPersistenceConfig
-from .custom_context import CustomBrowserContext
+from mcp_server_browser_use.browser.config import BrowserPersistenceConfig
+from mcp_server_browser_use.browser.custom_context import CustomBrowserContext
 
 logger = logging.getLogger(__name__)
 

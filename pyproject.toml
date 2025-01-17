@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 
 dependencies = [
-    "mcp>=1.0.0",
+    "fastmcp>=0.4.1",
     "browser-use==0.1.19",
     "langchain>=0.3.14",
     "langchain-openai>=0.2.14",
@@ -26,6 +26,3 @@ email = "tarasenko.igor.v@gmail.com"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[project.scripts]
-mcp-server-browser-use = "mcp_server_browser_use:main"

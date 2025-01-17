@@ -14,7 +14,8 @@ from browser_use.browser.context import BrowserContext, BrowserContextConfig
 from playwright.async_api import Browser as PlaywrightBrowser
 from playwright.async_api import BrowserContext as PlaywrightBrowserContext
 
-from .config import BrowserPersistenceConfig
+from mcp_server_browser_use.browser.config import BrowserPersistenceConfig
+
 logger = logging.getLogger(__name__)
 
 
