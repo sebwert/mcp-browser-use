@@ -16,7 +16,6 @@ The server implements a browser automation system with:
 - Python 3.11 or higher
 - Dependencies listed in pyproject.toml including:
   - browser-use==0.1.19
-  - langchain and related packages
   - OpenAI API access
 
 ## Quickstart
@@ -37,24 +36,11 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/mcp-server-browser-use",
+        "/path/to/project",
         "run",
-        "mcp_server_browser_use"
-      ]
-    }
-}
-```
-</details>
-
-<details>
-  <summary>Published Configuration</summary>
-
-```json
-"mcpServers": {
-    "browser": {
-      "command": "uvx",
-      "args": [
-        "browser"
+        "fastmcp",
+        "run",
+        "/path/to/project/src/mcp_server_browser_use/server.py"
       ]
     }
 }
@@ -63,35 +49,17 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ## Development
 
-### Building and Publishing
-
-To prepare the package for distribution:
-
-1. Sync dependencies and update lockfile:
+Sync dependencies and update lockfile:
 ```bash
 uv sync
 ```
-
-2. Build package distributions:
-```bash
-uv build
-```
-
-3. Publish to PyPI:
-```bash
-uv publish
-```
-
-Note: You'll need to set PyPI credentials via environment variables or command flags:
-- Token: `--token` or `UV_PUBLISH_TOKEN`
-- Or username/password: `--username`/`UV_PUBLISH_USERNAME` and `--password`/`UV_PUBLISH_PASSWORD`
 
 ### Debugging
 
 For debugging, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
-npx @modelcontextprotocol/inspector uv --directory /path/to/project run mcp_server_browser_use
+npx @modelcontextprotocol/inspector uv --directory /path/to/project run fastmcp run /path/to/project/src/mcp_server_browser_use/server.py
 ```
 
 The Inspector will display a URL for the debugging interface.
