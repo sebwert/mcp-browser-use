@@ -59,7 +59,7 @@ async def _safe_cleanup():
         _global_browser = None
         _global_browser_context = None
         _global_agent_state = None
-        _global_agent = None
+        _global_agent = AgentState()
 
 
 @app.tool()
