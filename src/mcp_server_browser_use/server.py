@@ -9,10 +9,12 @@ import mcp.server.stdio
 import os
 
 # browser-use imports
-from browser_use.browser.browser import Browser, BrowserConfig
+from browser_use.browser.browser import BrowserConfig
 from browser_use.agent.service import Agent
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
+from .custom_browser import CustomBrowser
+from .agent.custom_agent import CustomAgent
 
 # Environment variables
 CHROME_PATH = os.getenv(
@@ -58,7 +60,7 @@ class BrowserUseServerState:
     """
 
     def __init__(self):
-        self.browser: Optional[Browser] = None
+        self.browser: Optional[CustomBrowser] = None
         self.history_log: List[str] = []
         self.llm: Optional[ChatOpenAI] = None
         self.vision_enabled: bool = False
@@ -297,17 +299,13 @@ async def call_tool_handler(
                 f"persist_session={persist_session}, load_timeouts={load_timeouts}",
             )
 
-            state.browser = Browser(
+            state.browser = CustomBrowser(
                 config=BrowserConfig(
                     headless=headless,
-                    disable_security=disable_security,
                     chrome_instance_path=chrome_path if chrome_path else None,
-                    new_context_config={
-                        "viewport": window_size,
-                        "user_data_dir": CHROME_USER_DATA if persist_session else None,
-                        "debugging_port": CHROME_DEBUGGING_PORT,
-                        "debugging_host": CHROME_DEBUGGING_HOST,
-                    },
+                    disable_security=disable_security,
+                    extra_chromium_args=[],
+                    proxy=None,
                 )
             )
             msg = "Browser launched/attached successfully"
@@ -356,7 +354,7 @@ async def call_tool_handler(
                 safe_log("error", error_msg)
                 raise ValueError(error_msg)
 
-            agent = Agent(
+            agent = CustomAgent(
                 task=f"{description}\n\nSteps:\n"
                 + "\n".join(f"- {step}" for step in steps),
                 browser=state.browser,
