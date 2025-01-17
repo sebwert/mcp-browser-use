@@ -38,9 +38,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "--directory",
         "/path/to/project",
         "run",
-        "fastmcp",
-        "run",
-        "/path/to/project/src/mcp_server_browser_use/server.py"
+        "mcp-server-browser-use",
       ]
     }
 }

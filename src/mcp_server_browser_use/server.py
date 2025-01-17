@@ -1,16 +1,13 @@
+import asyncio
 import os
+import sys
 import traceback
-from typing import Any, Dict, List
-
-import logging
-
-logging.basicConfig(level=logging.INFO)
+from typing import List
 
 from browser_use import BrowserConfig
 from browser_use.browser.context import BrowserContextConfig
 from fastmcp import FastMCP
-from mcp.types import Resource, TextContent, Tool
-from pydantic import AnyUrl, BaseModel
+from mcp.types import TextContent
 
 from mcp_server_browser_use.agent.custom_agent import CustomAgent
 from mcp_server_browser_use.browser.custom_browser import CustomBrowser
@@ -24,16 +21,41 @@ _global_browser = None
 _global_browser_context = None
 _global_agent_state = AgentState()
 
-app = FastMCP(title="browser-automation", version="0.1.0")
+app = FastMCP(name="mcp_server_browser_use", version="0.1.0")
 
 
-async def reset():
-    global _global_agent, _global_browser, _global_browser_context, _global_agent_state
-    await _global_browser.close()
-    _global_agent = None
-    _global_browser = None
-    _global_browser_context = None
-    _global_agent_state = AgentState()
+async def _safe_cleanup():
+    """Safely clean up browser resources"""
+    global _global_browser, _global_agent_state, _global_browser_context, _global_agent
+
+    try:
+        if _global_agent_state:
+            try:
+                await _global_agent_state.request_stop()
+            except Exception:
+                pass
+
+        if _global_browser_context:
+            try:
+                await _global_browser_context.close()
+            except Exception:
+                pass
+
+        if _global_browser:
+            try:
+                await _global_browser.close()
+            except Exception:
+                pass
+
+    except Exception as e:
+        # Log the error, but don't re-raise
+        print(f"Error during cleanup: {e}", file=sys.stderr)
+    finally:
+        # Reset global variables
+        _global_browser = None
+        _global_browser_context = None
+        _global_agent_state = None
+        _global_agent = None
 
 
 @app.tool("run-browser-agent")
@@ -49,7 +71,7 @@ async def run_browser_agent(task: str, add_infos: str = "") -> List[TextContent]
         model_provider = os.getenv("MCP_MODEL_PROVIDER", "openai")
         model_name = os.getenv("MCP_MODEL_NAME", "gpt-4o")
         temperature = float(os.getenv("MCP_TEMPERATURE", "0.7"))
-        max_steps = int(os.getenv("MCP_MAX_STEPS", "15"))
+        max_steps = int(os.getenv("MCP_MAX_STEPS", "100"))
         use_vision = os.getenv("MCP_USE_VISION", "true").lower() == "true"
         max_actions_per_step = int(os.getenv("MCP_MAX_ACTIONS_PER_STEP", "5"))
         tool_call_in_content = (
@@ -61,12 +83,7 @@ async def run_browser_agent(task: str, add_infos: str = "") -> List[TextContent]
             provider=model_provider, model_name=model_name, temperature=temperature
         )
 
-        # Browser setup
-        persistent_session = (
-            os.getenv("CHROME_PERSISTENT_SESSION", "").lower() == "true"
-        )
         chrome_path = os.getenv("CHROME_PATH", "") or None
-        user_data_dir = os.getenv("CHROME_USER_DATA", None)
 
         # Create or reuse browser
         if not _global_browser:
@@ -106,11 +123,30 @@ async def run_browser_agent(task: str, add_infos: str = "") -> List[TextContent]
         history = await _global_agent.run(max_steps=max_steps)
         final_result = history.final_result() or "No final result. Possibly incomplete."
 
-        await reset()
-
-        return [TextContent(type="text", text=final_result)]
+        return final_result
 
     except Exception as e:
-        error_message = f"run-browser-agent error: {str(e)}\n{traceback.format_exc()}"
-        await reset()
-        return [TextContent(type="text", text=error_message)]
+        raise ValueError(f"run-browser-agent error: {str(e)}\n{traceback.format_exc()}")
+
+    finally:
+        await _safe_cleanup()
+
+
+def main():
+    try:
+        app.run()
+    except Exception as e:
+        print(f"Error running MCP server: {e}", file=sys.stderr)
+    finally:
+        # Use a separate event loop to ensure cleanup
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(_safe_cleanup())
+            loop.close()
+        except Exception as cleanup_error:
+            print(f"Cleanup error: {cleanup_error}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
