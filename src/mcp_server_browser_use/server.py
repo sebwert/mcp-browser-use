@@ -2,7 +2,6 @@ import asyncio
 from typing import Any, Dict, List, Optional
 from contextlib import closing
 from pydantic import AnyUrl
-
 import mcp.types as types
 from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
@@ -13,6 +12,15 @@ from browser_use.browser.browser import Browser, BrowserConfig
 from browser_use.agent.service import Agent
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
+
+
+def safe_log(level: str, data: str) -> None:
+    """Safely log messages, catching any exceptions to prevent crashes."""
+    try:
+        app.request_context.session.send_log_message(level=level, data=data)
+    except Exception:
+        pass  # Silently handle any logging failures
+
 
 PROMPT_TEMPLATE = """
 Welcome to the Browser-Use MCP Demo!
@@ -33,27 +41,18 @@ class BrowserUseServerState:
     """
 
     def __init__(self):
-        app.request_context.session.send_log_message(
-            level="info", data="Initializing BrowserUseServerState"
-        )
         self.browser: Optional[Browser] = None
         self.history_log: List[str] = []
         self.llm: Optional[ChatOpenAI] = None
         self.vision_enabled: bool = False
-        app.request_context.session.send_log_message(
-            level="info", data="BrowserUseServerState initialized successfully"
-        )
 
     def add_history(self, message: str):
-        app.request_context.session.send_log_message(
-            level="debug", data=f"Adding to history log: {message}"
-        )
+        safe_log("debug", f"Adding to history log: {message}")
         self.history_log.append(message)
 
     def get_history(self) -> str:
-        app.request_context.session.send_log_message(
-            level="debug",
-            data=f"Retrieving history log with {len(self.history_log)} entries",
+        safe_log(
+            "debug", f"Retrieving history log with {len(self.history_log)} entries"
         )
         if not self.history_log:
             return "No actions have been taken yet."
@@ -69,9 +68,7 @@ async def list_resources_handler() -> List[types.Resource]:
     """
     Expose a single resource that holds the textual history log.
     """
-    app.request_context.session.send_log_message(
-        level="info", data="Handling list_resources request"
-    )
+    safe_log("info", "Handling list_resources request")
     resources = [
         types.Resource(
             uri=AnyUrl("history://actions"),
@@ -80,9 +77,7 @@ async def list_resources_handler() -> List[types.Resource]:
             mimeType="text/plain",
         )
     ]
-    app.request_context.session.send_log_message(
-        level="info", data=f"Returning {len(resources)} resources"
-    )
+    safe_log("info", f"Returning {len(resources)} resources")
     return resources
 
 
@@ -91,17 +86,13 @@ async def read_resource_handler(uri: AnyUrl) -> str:
     """
     Return the aggregated browser action log if the user asks for history://actions
     """
-    app.request_context.session.send_log_message(
-        level="info", data=f"Handling read_resource request for URI: {uri}"
-    )
+    safe_log("info", f"Handling read_resource request for URI: {uri}")
     if str(uri) == "history://actions":
         history = state.get_history()
-        app.request_context.session.send_log_message(
-            level="info", data=f"Returning history with {len(history)} characters"
-        )
+        safe_log("info", f"Returning history with {len(history)} characters")
         return history
     error_msg = f"Unknown resource URI requested: {uri}"
-    app.request_context.session.send_log_message(level="error", data=error_msg)
+    safe_log("error", error_msg)
     raise ValueError(error_msg)
 
 
@@ -110,9 +101,7 @@ async def list_prompts_handler() -> List[types.Prompt]:
     """
     Provide one demo prompt, mcp-demo, for exploring browser capabilities.
     """
-    app.request_context.session.send_log_message(
-        level="info", data="Handling list_prompts request"
-    )
+    safe_log("info", "Handling list_prompts request")
     prompts = [
         types.Prompt(
             name="mcp-demo",
@@ -120,9 +109,7 @@ async def list_prompts_handler() -> List[types.Prompt]:
             arguments=[],
         )
     ]
-    app.request_context.session.send_log_message(
-        level="info", data=f"Returning {len(prompts)} prompts"
-    )
+    safe_log("info", f"Returning {len(prompts)} prompts")
     return prompts
 
 
@@ -133,19 +120,17 @@ async def get_prompt_handler(
     """
     Return a text prompt. We don't expect arguments for the basic mcp-demo.
     """
-    app.request_context.session.send_log_message(
-        level="info",
-        data=f"Handling get_prompt request for prompt: {name} with arguments: {arguments}",
+    safe_log(
+        "info",
+        f"Handling get_prompt request for prompt: {name} with arguments: {arguments}",
     )
     if name != "mcp-demo":
         error_msg = f"Unknown prompt requested: {name}"
-        app.request_context.session.send_log_message(level="error", data=error_msg)
+        safe_log("error", error_msg)
         raise ValueError(error_msg)
 
     prompt = PROMPT_TEMPLATE.strip()
-    app.request_context.session.send_log_message(
-        level="info", data="Returning demo prompt"
-    )
+    safe_log("info", "Returning demo prompt")
     return types.GetPromptResult(
         description="Demo prompt for browser-based tasks",
         messages=[
@@ -275,14 +260,10 @@ async def call_tool_handler(
     Integrate with the 'browser-use' library. Each tool name corresponds to a
     different chunk of logic. We'll maintain a single global Browser and an optional LLM.
     """
-    app.request_context.session.send_log_message(
-        level="info", data=f"Handling tool call: {name} with arguments: {arguments}"
-    )
+    safe_log("info", f"Handling tool call: {name} with arguments: {arguments}")
     try:
         if name == "browser_launch":
-            app.request_context.session.send_log_message(
-                level="info", data="Launching browser with configuration"
-            )
+            safe_log("info", "Launching browser with configuration")
             headless = arguments.get("headless", True)
             disable_security = arguments.get("disableSecurity", False)
             window_size = arguments.get("windowSize", {"width": 1280, "height": 800})
@@ -290,9 +271,9 @@ async def call_tool_handler(
             persist_session = arguments.get("persistSession", False)
             load_timeouts = arguments.get("loadTimeouts", {"min": 1, "max": 10})
 
-            app.request_context.session.send_log_message(
-                level="debug",
-                data=f"Browser config: headless={headless}, disable_security={disable_security}, "
+            safe_log(
+                "debug",
+                f"Browser config: headless={headless}, disable_security={disable_security}, "
                 f"window_size={window_size}, chrome_path={chrome_path}, "
                 f"persist_session={persist_session}, load_timeouts={load_timeouts}",
             )
@@ -306,14 +287,12 @@ async def call_tool_handler(
                 )
             )
             msg = "Browser launched/attached successfully"
-            app.request_context.session.send_log_message(level="info", data=msg)
+            safe_log("info", msg)
             state.add_history(msg)
             return [types.TextContent(type="text", text=msg)]
 
         elif name == "task_execute":
-            app.request_context.session.send_log_message(
-                level="info", data="Executing browser task"
-            )
+            safe_log("info", "Executing browser task")
             description = arguments.get("description", "")
             steps = arguments.get("steps", [])
             validation = arguments.get("validation", False)
@@ -321,17 +300,15 @@ async def call_tool_handler(
             vision_enabled = arguments.get("visionEnabled", False)
             llm_config = arguments.get("llmConfig", {})
 
-            app.request_context.session.send_log_message(
-                level="debug",
-                data=f"Task config: description='{description}', steps={steps}, "
+            safe_log(
+                "debug",
+                f"Task config: description='{description}', steps={steps}, "
                 f"validation={validation}, max_steps={max_steps}, "
                 f"vision_enabled={vision_enabled}, llm_config={llm_config}",
             )
 
             if llm_config:
-                app.request_context.session.send_log_message(
-                    level="info", data="Configuring LLM for task execution"
-                )
+                safe_log("info", "Configuring LLM for task execution")
                 provider = llm_config.get("provider", "openai")
                 model = llm_config.get("model", "gpt-3.5-turbo")
                 api_key = llm_config.get("apiKey", "")
@@ -344,18 +321,15 @@ async def call_tool_handler(
                     model=model,
                     api_version=api_version,
                 )
-                app.request_context.session.send_log_message(
-                    level="info",
-                    data=f"LLM configured with provider={provider}, model={model}",
+                safe_log(
+                    "info", f"LLM configured with provider={provider}, model={model}"
                 )
 
             if not state.browser:
                 error_msg = (
                     "No browser session found. Launch one with browser_launch first."
                 )
-                app.request_context.session.send_log_message(
-                    level="error", data=error_msg
-                )
+                safe_log("error", error_msg)
                 raise ValueError(error_msg)
 
             agent = Agent(
@@ -367,13 +341,9 @@ async def call_tool_handler(
                 use_vision=vision_enabled,
             )
 
-            app.request_context.session.send_log_message(
-                level="info", data=f"Starting task execution with max_steps={max_steps}"
-            )
+            safe_log("info", f"Starting task execution with max_steps={max_steps}")
             result = await agent.run(max_steps=max_steps)
-            app.request_context.session.send_log_message(
-                level="info", data="Task execution completed"
-            )
+            safe_log("info", "Task execution completed")
 
             state.add_history(
                 f"Task executed: {description}\nSteps: {steps}\nResult: {result}"
@@ -381,17 +351,15 @@ async def call_tool_handler(
             return [types.TextContent(type="text", text=str(result))]
 
         elif name == "session_manage":
-            app.request_context.session.send_log_message(
-                level="info", data="Managing browser session"
-            )
+            safe_log("info", "Managing browser session")
             persist = arguments.get("persist", False)
             record_history = arguments.get("recordHistory", False)
             export_format = arguments.get("exportFormat", None)
             save_trace = arguments.get("saveTrace", False)
 
-            app.request_context.session.send_log_message(
-                level="debug",
-                data=f"Session config: persist={persist}, record_history={record_history}, "
+            safe_log(
+                "debug",
+                f"Session config: persist={persist}, record_history={record_history}, "
                 f"export_format={export_format}, save_trace={save_trace}",
             )
 
@@ -403,18 +371,16 @@ async def call_tool_handler(
             return [types.TextContent(type="text", text=msg)]
 
         elif name == "llm_configure":
-            app.request_context.session.send_log_message(
-                level="info", data="Configuring LLM"
-            )
+            safe_log("info", "Configuring LLM")
             provider = arguments.get("provider", "openai")
             model = arguments.get("model", "gpt-3.5-turbo")
             api_key = arguments.get("apiKey", "")
             base_url = arguments.get("baseUrl", "")
             api_version = arguments.get("apiVersion", "")
 
-            app.request_context.session.send_log_message(
-                level="debug",
-                data=f"LLM config: provider={provider}, model={model}, "
+            safe_log(
+                "debug",
+                f"LLM config: provider={provider}, model={model}, "
                 f"base_url={base_url}, api_version={api_version}",
             )
 
@@ -425,49 +391,43 @@ async def call_tool_handler(
                 api_version=api_version,
             )
             msg = f"LLM configured: provider={provider}, model={model}"
-            app.request_context.session.send_log_message(level="info", data=msg)
+            safe_log("info", msg)
             state.add_history(msg)
             return [types.TextContent(type="text", text=msg)]
 
         elif name == "history_export":
-            app.request_context.session.send_log_message(
-                level="info", data="Exporting history"
-            )
+            safe_log("info", "Exporting history")
             fmt = arguments.get("format", "json")
             msg = f"History export requested in {fmt} format. (Stubbed implementation.)"
-            app.request_context.session.send_log_message(level="info", data=msg)
+            safe_log("info", msg)
             state.add_history(msg)
             return [types.TextContent(type="text", text=msg)]
 
         elif name == "task_validate":
-            app.request_context.session.send_log_message(
-                level="info", data="Validating task"
-            )
+            safe_log("info", "Validating task")
             result_data = arguments.get("resultData", "")
             msg = f"Task validation requested. Checking: {result_data}"
-            app.request_context.session.send_log_message(level="info", data=msg)
+            safe_log("info", msg)
             state.add_history(msg)
             return [types.TextContent(type="text", text=f"Validated: {result_data}")]
 
         elif name == "vision_toggle":
-            app.request_context.session.send_log_message(
-                level="info", data="Toggling vision capabilities"
-            )
+            safe_log("info", "Toggling vision capabilities")
             enable = arguments.get("enable", False)
             state.vision_enabled = enable
             msg = f"Vision toggled to: {enable}"
-            app.request_context.session.send_log_message(level="info", data=msg)
+            safe_log("info", msg)
             state.add_history(msg)
             return [types.TextContent(type="text", text=msg)]
 
         else:
             error_msg = f"Unknown tool name: {name}"
-            app.request_context.session.send_log_message(level="error", data=error_msg)
+            safe_log("error", error_msg)
             raise ValueError(error_msg)
 
     except Exception as e:
         error_msg = f"Error in call_tool: {str(e)}"
-        app.request_context.session.send_log_message(level="error", data=error_msg)
+        safe_log("error", error_msg)
         return [types.TextContent(type="text", text=f"Error: {str(e)}")]
 
 
@@ -476,13 +436,7 @@ async def run_server_stdio():
     Run the server using stdio transport. This can be used for local debugging or
     integration with CLI-based MCP clients.
     """
-    app.request_context.session.send_log_message(
-        level="info", data="Starting browser-use MCP server with stdio transport"
-    )
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        app.request_context.session.send_log_message(
-            level="info", data="Initializing server with capabilities"
-        )
         await app.run(
             read_stream,
             write_stream,
