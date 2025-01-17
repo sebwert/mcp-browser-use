@@ -170,20 +170,30 @@ class CustomAgent(Agent):
 
         try:
             if isinstance(self.llm, ChatOpenAI):
-                logger.info("Using OpenAI chat model")
-                import instructor
+                try:
+                    logger.info("Using OpenAI chat model")
+                    import instructor
 
-                client = instructor.from_openai(self.llm.root_async_client)
-                logger.debug(f"Using model: {self.llm.model_name}")
-                messages = [
-                    _convert_message_to_dict(message) for message in input_messages
-                ]
-                parsed = await client.chat.completions.create(
-                    messages=messages,
-                    model=self.llm.model_name,
-                    response_model=self.AgentOutput,
-                )
-                logger.debug(f"Raw OpenAI response: {parsed}")
+                    client = instructor.from_openai(self.llm.root_async_client)
+                    logger.debug(f"Using model: {self.llm.model_name}")
+                    messages = [
+                        _convert_message_to_dict(message) for message in input_messages
+                    ]
+                    parsed = await client.chat.completions.create(
+                        messages=messages,
+                        model=self.llm.model_name,
+                        response_model=self.AgentOutput,
+                    )
+                    logger.debug(f"Raw OpenAI response: {parsed}")
+                except Exception as e:
+                    logger.error(f"Error getting structured output: {str(e)}")
+                    logger.info(f"Using default structured output")
+                    structured_llm = self.llm.with_structured_output(
+                        self.AgentOutput, include_raw=True
+                    )
+                    response: dict[str, Any] = await structured_llm.ainvoke(input_messages)  # type: ignore
+                    logger.debug(f"Raw LLM response: {response}")
+                    parsed: AgentOutput = response["parsed"]
             else:
                 logger.info(f"Using non-OpenAI model: {type(self.llm).__name__}")
                 structured_llm = self.llm.with_structured_output(
