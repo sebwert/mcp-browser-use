@@ -22,6 +22,7 @@ from browser_use.agent.views import (
     AgentOutput,
     AgentHistory,
 )
+from browser_use.agent.message_manager.views import MessageHistory, ManagedMessage
 from browser_use.browser.browser import Browser
 from browser_use.browser.context import BrowserContext
 from browser_use.browser.views import BrowserStateHistory
@@ -37,6 +38,7 @@ from langchain_core.messages import (
     BaseMessage,
 )
 from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai.chat_models.base import _convert_message_to_dict
 from mcp_server_browser_use.utils.agent_state import AgentState
 from mcp_server_browser_use.agent.custom_massage_manager import CustomMassageManager
@@ -63,7 +65,7 @@ class CustomAgent(Agent):
         max_failures: int = 5,
         retry_delay: int = 10,
         system_prompt_class: Type[SystemPrompt] = SystemPrompt,
-        max_input_tokens: int = 128000,
+        max_input_tokens: int = 13000,
         validate_output: bool = False,
         include_attributes: list[str] = [
             "title",
@@ -258,10 +260,50 @@ class CustomAgent(Agent):
                 logger.error(f"Fallback parsing failed: {str(parse_error)}")
                 raise
 
+    def summarize_messages(self):
+        """Summarize message history if it exceeds 5 messages."""
+        stored_messages = self.message_manager.get_messages()
+        message_count = len(stored_messages)
+
+        if message_count <= 5:
+            logger.debug("Message count <= 5, skipping summarization")
+            return False
+
+        logger.info(f"Summarizing {message_count} messages")
+        try:
+            summarization_prompt = ChatPromptTemplate.from_messages(
+                [
+                    MessagesPlaceholder(variable_name="chat_history"),
+                    (
+                        "user",
+                        "Distill the above chat messages into a single summary message. Include as many specific details as you can.",
+                    ),
+                ]
+            )
+            summarization_chain = summarization_prompt | self.llm
+
+            summary_message = summarization_chain.invoke(
+                {"chat_history": stored_messages}
+            )
+            logger.debug(f"Generated summary: {summary_message}")
+
+            self.message_manager.history = MessageHistory(
+                messages=[ManagedMessage(message=summary_message)]
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error during message summarization: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise
+
     @time_execution_async("--step")
     async def step(self, step_info: Optional[CustomAgentStepInfo] = None) -> None:
         """Execute one step of the task"""
         logger.info(f"\n📍 Step {self.n_steps}")
+        logger.info(f"History token count: {self.message_manager.history.total_tokens}")
+        # self.summarize_messages()
         state = None
         model_output = None
         result: list[ActionResult] = []
