@@ -2,6 +2,8 @@
 
 MCP server for browser-use
 
+<a href="https://glama.ai/mcp/servers/dz6dy5hw59"><img width="380" height="200" src="https://glama.ai/mcp/servers/dz6dy5hw59/badge" alt="Browser-Use Server MCP server" /></a>
+
 ## Components
 
 ### Resources
