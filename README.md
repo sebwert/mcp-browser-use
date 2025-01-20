@@ -37,20 +37,6 @@ The server implements a browser automation system with:
 
 ### Quick Start
 
-1. Install the package:
-```bash
-pip install mcp-server-browser-use
-```
-
-2. Set up your environment variables (see Configuration section)
-
-3. Run the server:
-```bash
-mcp-server-browser-use
-```
-
-### Configuration
-
 #### Claude Desktop
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
@@ -62,11 +48,8 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 ```json
 "mcpServers": {
     "mcp_server_browser_use": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "--directory",
-        "/path/to/project",
-        "run",
         "mcp-server-browser-use",
       ],
       "env": {
