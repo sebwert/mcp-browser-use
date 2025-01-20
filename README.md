@@ -18,6 +18,8 @@ MCP server for browser-use - a powerful browser automation system that enables A
 - 🛠️ **Extensible**: Custom browser automation capabilities
 - 🤝 **MCP Integration**: Seamless integration with Model Context Protocol
 
+<a href="https://glama.ai/mcp/servers/dz6dy5hw59"><img width="380" height="200" src="https://glama.ai/mcp/servers/dz6dy5hw59/badge" alt="Browser-Use Server MCP server" /></a>
+
 ## Components
 
 ### Resources
