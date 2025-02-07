@@ -5,20 +5,17 @@ import traceback
 from typing import List, Optional
 
 import logging
+logging.getLogger().addHandler(logging.NullHandler())
+logging.getLogger().propagate = False
 
 from mcp_server_browser_use.agent.custom_prompts import (
     CustomAgentMessagePrompt,
     CustomSystemPrompt,
 )
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(pathname)s:%(lineno)d - %(levelname)s - %(message)s",
-)
-
 from browser_use import BrowserConfig
-from browser_use.browser.context import BrowserContextConfig
-from fastmcp import FastMCP
+from browser_use.browser.context import BrowserContextConfig, BrowserContextWindowSize
+from fastmcp.server import FastMCP
 from mcp.types import TextContent
 
 from mcp_server_browser_use.agent.custom_agent import CustomAgent
@@ -39,27 +36,6 @@ app = FastMCP("mcp_server_browser_use")
 def get_env_bool(key: str, default: bool = False) -> bool:
     """Get boolean value from environment variable."""
     return os.getenv(key, str(default)).lower() in ("true", "1", "yes")
-
-
-def get_browser_config() -> BrowserConfig:
-    """Get browser configuration from environment variables."""
-    return BrowserConfig(
-        headless=get_env_bool("BROWSER_HEADLESS", False),
-        disable_security=get_env_bool("BROWSER_DISABLE_SECURITY", False),
-        chrome_instance_path=os.getenv("CHROME_PATH") or None,
-        extra_chromium_args=os.getenv("BROWSER_EXTRA_ARGS", "").split(),
-        wss_url=os.getenv("BROWSER_WSS_URL"),
-        proxy=os.getenv("BROWSER_PROXY"),
-    )
-
-
-def get_context_config() -> BrowserContextConfig:
-    """Get browser context configuration from environment variables."""
-    return BrowserContextConfig(
-        trace_path=os.getenv("BROWSER_TRACE_PATH"),
-        save_recording_path=os.getenv("BROWSER_RECORDING_PATH"),
-        no_viewport=get_env_bool("BROWSER_NO_VIEWPORT", False),
-    )
 
 
 async def _safe_cleanup():
@@ -105,27 +81,51 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
         # Clear any previous agent stop signals
         _global_agent_state.clear_stop()
 
-        # Get environment variables with defaults
+        # Get browser configuration
+        headless = get_env_bool("BROWSER_HEADLESS", True)
+        disable_security = get_env_bool("BROWSER_DISABLE_SECURITY", False)
+        window_w = int(os.getenv("BROWSER_WINDOW_WIDTH", "1280"))
+        window_h = int(os.getenv("BROWSER_WINDOW_HEIGHT", "720"))
+
+        # Get agent configuration
         model_provider = os.getenv("MCP_MODEL_PROVIDER", "anthropic")
         model_name = os.getenv("MCP_MODEL_NAME", "claude-3-5-sonnet-20241022")
         temperature = float(os.getenv("MCP_TEMPERATURE", "0.7"))
         max_steps = int(os.getenv("MCP_MAX_STEPS", "100"))
         use_vision = get_env_bool("MCP_USE_VISION", True)
         max_actions_per_step = int(os.getenv("MCP_MAX_ACTIONS_PER_STEP", "5"))
-        tool_call_in_content = get_env_bool("MCP_TOOL_CALL_IN_CONTENT", True)
+        tool_calling_method = os.getenv("MCP_TOOL_CALLING_METHOD", "auto")
+
+        # Configure browser window size
+        extra_chromium_args = [f"--window-size={window_w},{window_h}"]
+
+        # Initialize browser if needed
+        if not _global_browser:
+            _global_browser = CustomBrowser(
+                config=BrowserConfig(
+                    headless=headless,
+                    disable_security=disable_security,
+                    extra_chromium_args=extra_chromium_args,
+                )
+            )
+
+        # Initialize browser context if needed
+        if not _global_browser_context:
+            _global_browser_context = await _global_browser.new_context(
+                config=BrowserContextConfig(
+                    trace_path=os.getenv("BROWSER_TRACE_PATH"),
+                    save_recording_path=os.getenv("BROWSER_RECORDING_PATH"),
+                    no_viewport=False,
+                    browser_window_size=BrowserContextWindowSize(
+                        width=window_w, height=window_h
+                    ),
+                )
+            )
 
         # Prepare LLM
         llm = utils.get_llm_model(
             provider=model_provider, model_name=model_name, temperature=temperature
         )
-
-        # Create or reuse browser with improved configuration
-        if not _global_browser:
-            _global_browser = CustomBrowser(config=get_browser_config())
-        if not _global_browser_context:
-            _global_browser_context = await _global_browser.new_context(
-                config=get_context_config()
-            )
 
         # Create controller and agent
         controller = CustomController()
@@ -140,8 +140,8 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
             system_prompt_class=CustomSystemPrompt,
             agent_prompt_class=CustomAgentMessagePrompt,
             max_actions_per_step=max_actions_per_step,
-            tool_call_in_content=tool_call_in_content,
             agent_state=_global_agent_state,
+            tool_calling_method=tool_calling_method,
         )
 
         # Run agent with improved error handling
@@ -163,25 +163,11 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
         return f"Error during task execution: {str(e)}"
 
     finally:
-        await _safe_cleanup()
+        asyncio.create_task(_safe_cleanup())
 
 
 def main():
-    try:
-        app.run()
-    except Exception as e:
-        print(
-            f"Error running MCP server: {e}\n{traceback.format_exc()}", file=sys.stderr
-        )
-    finally:
-        # Use a separate event loop to ensure cleanup
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(_safe_cleanup())
-            loop.close()
-        except Exception as cleanup_error:
-            print(f"Cleanup error: {cleanup_error}", file=sys.stderr)
+    app.run()
 
 
 if __name__ == "__main__":
