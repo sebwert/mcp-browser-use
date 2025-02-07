@@ -6,7 +6,15 @@ from typing import List, Optional
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+from mcp_server_browser_use.agent.custom_prompts import (
+    CustomAgentMessagePrompt,
+    CustomSystemPrompt,
+)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(pathname)s:%(lineno)d - %(levelname)s - %(message)s",
+)
 
 from browser_use import BrowserConfig
 from browser_use.browser.context import BrowserContextConfig
@@ -129,6 +137,8 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
             browser=_global_browser,
             browser_context=_global_browser_context,
             controller=controller,
+            system_prompt_class=CustomSystemPrompt,
+            agent_prompt_class=CustomAgentMessagePrompt,
             max_actions_per_step=max_actions_per_step,
             tool_call_in_content=tool_call_in_content,
             agent_state=_global_agent_state,
@@ -150,7 +160,7 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
 
     except Exception as e:
         logging.error(f"run-browser-agent error: {str(e)}\n{traceback.format_exc()}")
-        raise ValueError(f"run-browser-agent error: {str(e)}")
+        return f"Error during task execution: {str(e)}"
 
     finally:
         await _safe_cleanup()
