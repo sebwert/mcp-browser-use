@@ -13,15 +13,6 @@ from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from .llm import DeepSeekR1ChatOpenAI, DeepSeekR1ChatOllama
 
-PROVIDER_DISPLAY_NAMES = {
-    "openai": "OpenAI",
-    "azure_openai": "Azure OpenAI",
-    "anthropic": "Anthropic",
-    "deepseek": "DeepSeek",
-    "gemini": "Gemini",
-}
-
-
 def get_llm_model(provider: str, **kwargs):
     """
     获取LLM 模型
@@ -35,7 +26,7 @@ def get_llm_model(provider: str, **kwargs):
         )
         api_key = kwargs.get("api_key", "") or os.getenv(env_var, "")
         if not api_key:
-            handle_api_key_error(provider, env_var)
+            raise ValueError(f"API key for {provider} is not set")
         kwargs["api_key"] = api_key
 
     if provider == "anthropic":
@@ -137,31 +128,29 @@ def get_llm_model(provider: str, **kwargs):
             azure_endpoint=base_url,
             api_key=api_key,
         )
+    elif provider == "openrouter":
+        if not kwargs.get("base_url", ""):
+            base_url = os.getenv("OPENROUTER_ENDPOINT", "")
+        else:
+            base_url = kwargs.get("base_url")
+
+        model_name = kwargs.get("model_name", "openai/o3-mini")
+        if "r1" in model_name or "aion" in model_name:
+            return DeepSeekR1ChatOpenAI(
+                model=model_name,
+                temperature=kwargs.get("temperature", 0.0),
+                base_url=base_url,
+                api_key=api_key,
+            )
+        else:
+            return ChatOpenAI(
+                model=model_name,
+                temperature=kwargs.get("temperature", 0.0),
+                base_url=base_url,
+                api_key=api_key,
+            )
     else:
         raise ValueError(f"Unsupported provider: {provider}")
-
-
-# Predefined model names for common providers
-model_names = {
-    "anthropic": ["claude-3-5-sonnet-20240620", "claude-3-opus-20240229"],
-    "openai": ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "o3-mini"],
-    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
-    "gemini": [
-        "gemini-2.0-flash-exp",
-        "gemini-2.0-flash-thinking-exp",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash-8b-latest",
-        "gemini-2.0-flash-thinking-exp-01-21",
-    ],
-    "ollama": ["qwen2.5:7b", "llama2:7b", "deepseek-r1:14b", "deepseek-r1:32b"],
-    "azure_openai": ["gpt-4o", "gpt-4", "gpt-3.5-turbo"],
-    "mistral": [
-        "pixtral-large-latest",
-        "mistral-large-latest",
-        "mistral-small-latest",
-        "ministral-8b-latest",
-    ],
-}
 
 
 def encode_image(img_path):

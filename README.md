@@ -43,6 +43,8 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "mcp-server-browser-use",
       ],
       "env": {
+        "OPENROUTER_API_KEY": "",
+        "OPENROUTER_ENDPOINT": "https://openrouter.ai/api/v1",
         "OPENAI_ENDPOINT": "https://api.openai.com/v1",
         "OPENAI_API_KEY": "",
         "ANTHROPIC_ENDPOINT": "https://api.anthropic.com",
@@ -109,6 +111,27 @@ npx @modelcontextprotocol/inspector uv --directory . run mcp-server-browser-use
 -   **Browser Conflicts**: Close all Chrome instances before starting.
 -   **API Errors**: Verify API keys in environment variables match your LLM provider.
 -   **Vision Support**: Ensure `MCP_USE_VISION=true` for screenshot analysis.
+
+## Provider Configuration
+
+The server supports multiple LLM providers through environment variables. Here are the available options for `MCP_MODEL_PROVIDER`:
+
+| Provider | Value | Required Env Variables |
+|----------|--------|----------------------|
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY`<br>`ANTHROPIC_ENDPOINT` (optional) |
+| OpenAI | `openai` | `OPENAI_API_KEY`<br>`OPENAI_ENDPOINT` (optional) |
+| Azure OpenAI | `azure_openai` | `AZURE_OPENAI_API_KEY`<br>`AZURE_OPENAI_ENDPOINT` |
+| DeepSeek | `deepseek` | `DEEPSEEK_API_KEY`<br>`DEEPSEEK_ENDPOINT` (optional) |
+| Gemini | `gemini` | `GOOGLE_API_KEY` |
+| Mistral | `mistral` | `MISTRAL_API_KEY`<br>`MISTRAL_ENDPOINT` (optional) |
+| Ollama | `ollama` | `OLLAMA_ENDPOINT` (optional, defaults to localhost:11434) |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY`<br>`OPENROUTER_ENDPOINT` (optional) |
+
+### Notes:
+- For endpoints marked as optional, default values will be used if not specified
+- Temperature can be configured using `MCP_TEMPERATURE` (default: 0.3)
+- Model can be specified using `MCP_MODEL_NAME`
+- For Ollama models, additional context settings like `num_ctx` and `num_predict` are configurable
 
 ## Credits
 
