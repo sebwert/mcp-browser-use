@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 import traceback
-from typing import List
+from typing import List, Optional
 
 import logging
 
@@ -26,6 +26,32 @@ _global_browser_context = None
 _global_agent_state = AgentState()
 
 app = FastMCP("mcp_server_browser_use")
+
+
+def get_env_bool(key: str, default: bool = False) -> bool:
+    """Get boolean value from environment variable."""
+    return os.getenv(key, str(default)).lower() in ("true", "1", "yes")
+
+
+def get_browser_config() -> BrowserConfig:
+    """Get browser configuration from environment variables."""
+    return BrowserConfig(
+        headless=get_env_bool("BROWSER_HEADLESS", False),
+        disable_security=get_env_bool("BROWSER_DISABLE_SECURITY", False),
+        chrome_instance_path=os.getenv("CHROME_PATH") or None,
+        extra_chromium_args=os.getenv("BROWSER_EXTRA_ARGS", "").split(),
+        wss_url=os.getenv("BROWSER_WSS_URL"),
+        proxy=os.getenv("BROWSER_PROXY"),
+    )
+
+
+def get_context_config() -> BrowserContextConfig:
+    """Get browser context configuration from environment variables."""
+    return BrowserContextConfig(
+        trace_path=os.getenv("BROWSER_TRACE_PATH"),
+        save_recording_path=os.getenv("BROWSER_RECORDING_PATH"),
+        no_viewport=get_env_bool("BROWSER_NO_VIEWPORT", False),
+    )
 
 
 async def _safe_cleanup():
@@ -72,40 +98,25 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
         _global_agent_state.clear_stop()
 
         # Get environment variables with defaults
-        model_provider = os.getenv("MCP_MODEL_PROVIDER", "openai")
-        model_name = os.getenv("MCP_MODEL_NAME", "gpt-4o")
+        model_provider = os.getenv("MCP_MODEL_PROVIDER", "anthropic")
+        model_name = os.getenv("MCP_MODEL_NAME", "claude-3-5-sonnet-20241022")
         temperature = float(os.getenv("MCP_TEMPERATURE", "0.7"))
         max_steps = int(os.getenv("MCP_MAX_STEPS", "100"))
-        use_vision = os.getenv("MCP_USE_VISION", "true").lower() == "true"
+        use_vision = get_env_bool("MCP_USE_VISION", True)
         max_actions_per_step = int(os.getenv("MCP_MAX_ACTIONS_PER_STEP", "5"))
-        tool_call_in_content = (
-            os.getenv("MCP_TOOL_CALL_IN_CONTENT", "true").lower() == "true"
-        )
+        tool_call_in_content = get_env_bool("MCP_TOOL_CALL_IN_CONTENT", True)
 
         # Prepare LLM
         llm = utils.get_llm_model(
             provider=model_provider, model_name=model_name, temperature=temperature
         )
 
-        chrome_path = os.getenv("CHROME_PATH", "") or None
-
-        # Create or reuse browser
+        # Create or reuse browser with improved configuration
         if not _global_browser:
-            _global_browser = CustomBrowser(
-                config=BrowserConfig(
-                    headless=False,
-                    disable_security=False,
-                    chrome_instance_path=chrome_path,
-                    extra_chromium_args=[],
-                    wss_url=None,
-                    proxy=None,
-                )
-            )
+            _global_browser = CustomBrowser(config=get_browser_config())
         if not _global_browser_context:
             _global_browser_context = await _global_browser.new_context(
-                config=BrowserContextConfig(
-                    trace_path=None, save_recording_path=None, no_viewport=False
-                )
+                config=get_context_config()
             )
 
         # Create controller and agent
@@ -123,16 +134,23 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
             agent_state=_global_agent_state,
         )
 
-        # Run agent
-        history = await _global_agent.run(max_steps=max_steps)
-        final_result = (
-            history.final_result() or f"No final result. Possibly incomplete. {history}"
-        )
-
-        return final_result
+        # Run agent with improved error handling
+        try:
+            history = await _global_agent.run(max_steps=max_steps)
+            final_result = (
+                history.final_result()
+                or f"No final result. Possibly incomplete. {history}"
+            )
+            return final_result
+        except asyncio.CancelledError:
+            return "Task was cancelled"
+        except Exception as e:
+            logging.error(f"Agent run error: {str(e)}\n{traceback.format_exc()}")
+            return f"Error during task execution: {str(e)}"
 
     except Exception as e:
-        raise ValueError(f"run-browser-agent error: {str(e)}\n{traceback.format_exc()}")
+        logging.error(f"run-browser-agent error: {str(e)}\n{traceback.format_exc()}")
+        raise ValueError(f"run-browser-agent error: {str(e)}")
 
     finally:
         await _safe_cleanup()

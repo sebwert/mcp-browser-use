@@ -17,7 +17,6 @@ classifiers = [
 
 dependencies = [
     "fastmcp>=0.4.1",
-    "browser-use==0.1.19",
     "langchain>=0.3.14",
     "langchain-openai>=0.2.14",
     "pydantic>=2.10.5",
@@ -28,6 +27,9 @@ dependencies = [
     "pyperclip>=1.9.0",
     "langchain-ollama>=0.2.2",
     "instructor>=1.7.2",
+    "browser-use==0.1.29",
+    "json-repair>=0.35.0",
+    "langchain-mistralai>=0.2.6",
 ]
 
 [build-system]
