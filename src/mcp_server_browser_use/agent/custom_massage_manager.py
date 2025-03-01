@@ -68,7 +68,7 @@ class CustomMassageManager(MessageManager):
         min_message_len = 2 if self.message_context is not None else 1
         
         while diff > 0 and len(self.history.messages) > min_message_len:
-            self.history.remove_message(min_message_len) # alway remove the oldest message
+            self.history.remove_message(min_message_len) # always remove the oldest message
             diff = self.history.total_tokens - self.max_input_tokens
         
     def add_state_message(
