@@ -65,6 +65,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "CHROME_DEBUGGING_HOST": "localhost",
         "CHROME_PERSISTENT_SESSION": "false",
         "BROWSER_HEADLESS": "false",
+        "BROWSER_CHROME_INSTANCE_PATH" : "",
         "BROWSER_DISABLE_SECURITY": "false",
         "BROWSER_WINDOW_WIDTH": "1280",
         "BROWSER_WINDOW_HEIGHT": "720",

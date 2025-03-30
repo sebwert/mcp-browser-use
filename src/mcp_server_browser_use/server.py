@@ -84,6 +84,7 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
         # Get browser configuration
         headless = get_env_bool("BROWSER_HEADLESS", True)
         disable_security = get_env_bool("BROWSER_DISABLE_SECURITY", False)
+        chrome_instance_path = os.getenv("BROWSER_CHROME_INSTANCE_PATH", None)
         window_w = int(os.getenv("BROWSER_WINDOW_WIDTH", "1280"))
         window_h = int(os.getenv("BROWSER_WINDOW_HEIGHT", "720"))
 
@@ -105,6 +106,7 @@ async def run_browser_agent(task: str, add_infos: str = "") -> str:
                 config=BrowserConfig(
                     headless=headless,
                     disable_security=disable_security,
+                    chrome_instance_path=chrome_instance_path,
                     extra_chromium_args=extra_chromium_args,
                 )
             )
