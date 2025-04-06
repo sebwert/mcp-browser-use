@@ -27,6 +27,7 @@ AI-driven browser automation server implementing the Model Context Protocol (MCP
 - Python 3.11 or higher
 - uv (fast Python package installer)
 - Chrome/Chromium browser
+- Playwright `playwright install`
 
 ### Installation
 
@@ -115,8 +116,12 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 # Install dev dependencies
 uv sync
 
+# Install playwright
+playwright install
+
 # Run with debugger
-npx @modelcontextprotocol/inspector uv --directory . run mcp-server-browser-use
+# Don't forget to change timeout in inspector's config panel, default is 10 seconds
+npx @modelcontextprotocol/inspector@latest -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY -e BROWSER_HEADLESS=false -e CHROME_PERSISTENT_SESSION=true uv --directory . run mcp run src/mcp_server_browser_use/server.py
 ```
 
 ## Troubleshooting
