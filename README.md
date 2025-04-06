@@ -83,6 +83,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "MCP_MAX_ACTIONS_PER_STEP": "5",
         "MCP_TOOL_CALL_IN_CONTENT": "true"
     }
+  }
 }
 ```
 
