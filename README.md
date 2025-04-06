@@ -1,9 +1,16 @@
-# browser-use MCP server
+<img src="./assets/web-ui.png" alt="Browser Use Web UI" width="full"/>
 
+<br/>
+
+# browser-use MCP server
+[![Documentation](https://img.shields.io/badge/Documentation-📕-blue)](https://docs.browser-use.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+
+> **Project Note**: This MCP server implementation builds upon the [browser-use/web-ui](https://github.com/browser-use/web-ui) foundation. Core browser automation logic and configuration patterns are adapted from the original project.
 
 AI-driven browser automation server implementing the Model Context Protocol (MCP) for natural language browser control and web research.
+
+<a href="https://glama.ai/mcp/servers/@Saik0s/mcp-browser-use"><img width="380" height="200" src="https://glama.ai/mcp/servers/@Saik0s/mcp-browser-use/badge" alt="Browser-Use MCP server" /></a>
 
 ## Features
 
@@ -23,30 +30,7 @@ AI-driven browser automation server implementing the Model Context Protocol (MCP
 -   Python 3.11 or higher
 -   `uv` (fast Python package installer): `pip install uv`
 -   Chrome/Chromium browser installed
--   Install Playwright browsers: `uv run playwright install`
-
-### Installation & Running
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/mcp-browser-use.git # Replace with actual repo URL
-    cd mcp-browser-use
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    uv sync
-    ```
-
-3.  **Configure Environment Variables:**
-    *   Copy the example environment file: `cp .env.example .env`
-    *   Edit the `.env` file and add your API keys and desired settings (see [Configuration](#configuration-environment-variables) section below). At minimum, you need the API key for your chosen `MCP_MODEL_PROVIDER`.
-
-4.  **Run the server:**
-    ```bash
-    uv run mcp-server-browser-use
-    ```
-    The server will start and listen for MCP connections.
+-   Install Playwright browsers: `uv sync` and then `uv run playwright install`
 
 ### Integration with MCP Clients (e.g., Claude Desktop)
 
@@ -61,11 +45,8 @@ You can configure clients like Claude Desktop to connect to this server. Add the
       // "args": ["mcp-server-browser-use"],
 
       // Option 2: Run from local development source
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "run",
-        "--directory",
-        "/path/to/your/mcp-browser-use", // <--- CHANGE THIS PATH
         "mcp-server-browser-use"
       ],
       "env": {
@@ -265,13 +246,6 @@ uv sync --dev
 
 # Install playwright browsers
 uv run playwright install
-
-# Run type checking
-uv run pyright
-
-# Run linting/formatting checks
-uv run ruff check .
-uv run ruff format .
 
 # Run with debugger (Example connecting to own browser via CDP)
 # 1. Launch Chrome: google-chrome --remote-debugging-port=9222
