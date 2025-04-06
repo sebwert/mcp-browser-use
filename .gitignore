@@ -234,3 +234,5 @@ agent_history.gif
 trace.json
 recording.mp4
 temp/
+tmp/
+.vscode/
