@@ -23,8 +23,13 @@ dependencies = [
   "instructor>=1.7.2",
   "json-repair>=0.35.0",
   "langchain-mistralai>=0.2.6",
-  "mcp>=1.6.0", # Replaced fastmcp with mcp
-  "browser-use==0.1.29",
+  "mcp>=1.6.0",
+  "browser-use==0.1.40",
+  "MainContentExtractor==0.0.4",
+  "langchain-google-genai>=2.0.8",
+  "langchain-anthropic>=0.2.1",
+  "langchain-mistralai>=0.2.4",
+  "pillow>=11.1.0",
 ]
 
 [build-system]
