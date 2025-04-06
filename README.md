@@ -86,6 +86,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "PYTHONUNBUFFERED": "1",
         "PYTHONUTF8": "1"
     }
+  }
 }
 ```
 
