@@ -45,19 +45,23 @@ You can configure clients like Claude Desktop to connect to this server. Add the
       // "args": ["mcp-server-browser-use"],
 
       // Option 2: Run from local development source
-      "command": "uvx",
+      "command": "uv",
       "args": [
+        "--directory",
+        "/path/to/mcp-server-browser-use",
+        "run",
         "mcp-server-browser-use"
       ],
       "env": {
         // --- CRITICAL: Add required API keys here ---
-        "OPENAI_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENAI",
-        "ANTHROPIC_API_KEY": "YOUR_KEY_HERE_IF_USING_ANTHROPIC",
+        "OPENROUTER_API_KEY": "YOUR_OPENROUTER_API_KEY",
+        // "OPENAI_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENAI",
+        // "ANTHROPIC_API_KEY": "YOUR_KEY_HERE_IF_USING_ANTHROPIC",
         // ... add other keys based on MCP_MODEL_PROVIDER ...
 
         // --- Optional Overrides (defaults are usually fine) ---
-        "MCP_MODEL_PROVIDER": "anthropic", // Default provider
-        "MCP_MODEL_NAME": "claude-3-7-sonnet-20250219", // Default model
+        "MCP_MODEL_PROVIDER": "openrouter", // Use OpenRouter as provider
+        "MCP_MODEL_NAME": "google/gemini-2.5-pro-exp-03-25:free", // Example OpenRouter model
         "BROWSER_HEADLESS": "true",    // Default: run browser without UI
         "BROWSER_USE_LOGGING_LEVEL": "INFO",
 
@@ -104,8 +108,8 @@ Configure the server using environment variables. You can set these in your syst
 | Variable                        | Description                                                                                             | Required?                      | Default Value                     | Example Value                     |
 | :------------------------------ | :------------------------------------------------------------------------------------------------------ | :----------------------------- | :-------------------------------- | :-------------------------------- |
 | **LLM Settings**                |                                                                                                         |                                |                                   |                                   |
-| `MCP_MODEL_PROVIDER`            | LLM provider to use. See options below.                                                                 | **Yes**                        | `anthropic`                       | `openai`                          |
-| `MCP_MODEL_NAME`                | Specific model name for the chosen provider.                                                            | No                             | `claude-3-7-sonnet-20250219`      | `gpt-4o`                          |
+| `MCP_MODEL_PROVIDER`            | LLM provider to use. See options below.                                                                 | **Yes**                        | `anthropic`                       | `openrouter`                      |
+| `MCP_MODEL_NAME`                | Specific model name for the chosen provider.                                                            | No                             | `claude-3-7-sonnet-20250219`      | `anthropic/claude-3.7-sonnet` |
 | `MCP_TEMPERATURE`               | LLM temperature (0.0-2.0). Controls randomness.                                                         | No                             | `0.0`                             | `0.7`                             |
 | `MCP_TOOL_CALLING_METHOD`       | Method for tool invocation ('auto', 'json_schema', 'function_calling'). Affects `run_browser_agent`.    | No                             | `auto`                            | `json_schema`                     |
 | `MCP_MAX_INPUT_TOKENS`          | Max input tokens for LLM context for `run_browser_agent`.                                               | No                             | `128000`                          | `64000`                           |
@@ -251,9 +255,9 @@ uv run playwright install
 # 1. Launch Chrome: google-chrome --remote-debugging-port=9222
 # 2. Run inspector command:
 npx @modelcontextprotocol/inspector@latest \
-  -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
-  -e MCP_MODEL_PROVIDER=anthropic \
-  -e MCP_MODEL_NAME=claude-3-7-sonnet-20250219 \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  -e MCP_MODEL_PROVIDER=openrouter \
+  -e MCP_MODEL_NAME=anthropic/claude-3.7-sonnet \
   -e MCP_USE_OWN_BROWSER=true \
   -e CHROME_CDP=http://localhost:9222 \
   uv --directory . run mcp run src/mcp_server_browser_use/server.py

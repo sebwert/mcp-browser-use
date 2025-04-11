@@ -21,6 +21,7 @@ PROVIDER_DISPLAY_NAMES = {
     "alibaba": "Alibaba",
     "moonshot": "MoonShot",
     "unbound": "Unbound AI",
+    "openrouter": "OpenRouter",
 }
 
 
@@ -164,6 +165,28 @@ def get_llm_model(provider: str, **kwargs):
             base_url=os.getenv("UNBOUND_ENDPOINT", "https://api.getunbound.ai"),
             api_key=api_key,
         )
+    elif provider == "openrouter":
+        # OpenRouter uses OpenAI-compatible API, but requires custom endpoint and headers
+        if not kwargs.get("base_url", ""):
+            base_url = os.getenv("OPENROUTER_ENDPOINT", "https://openrouter.ai/api/v1")
+        else:
+            base_url = kwargs.get("base_url")
+        # Use MCP_API_KEY if set, else OPENROUTER_API_KEY
+        api_key = kwargs.get("api_key", "") or os.getenv("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise MissingAPIKeyError("openrouter", "OPENROUTER_API_KEY")
+        # OpenRouter requires HTTP-Referer and X-Title headers
+        default_headers = {
+            "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "https://github.com/browser-use/mcp-browser-use"),
+            "X-Title": os.getenv("OPENROUTER_X_TITLE", "MCP Browser Use"),
+        }
+        return ChatOpenAI(
+            model=kwargs.get("model_name", "anthropic/claude-3.7-sonnet"),
+            temperature=kwargs.get("temperature", 0.0),
+            base_url=base_url,
+            api_key=api_key,
+            default_headers=default_headers,
+        )
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 
@@ -205,6 +228,13 @@ model_names = {
     "alibaba": ["qwen-plus", "qwen-max", "qwen-turbo", "qwen-long"],
     "moonshot": ["moonshot-v1-32k-vision-preview", "moonshot-v1-8k-vision-preview"],
     "unbound": ["gemini-2.0-flash", "gpt-4o-mini", "gpt-4o", "gpt-4.5-preview"],
+    "openrouter": [
+        "google/gemini-2.5-pro-exp-03-25:free",
+        "openai/gpt-3.5-turbo",
+        "openai/gpt-4o",
+        "mistralai/mistral-large",
+        "meta-llama/llama-3-70b-instruct",
+    ],
 }
 
 
