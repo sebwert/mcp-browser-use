@@ -232,7 +232,7 @@ uv run playwright install
 npx @modelcontextprotocol/inspector@latest \
   -e MCP_LLM_OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
   -e MCP_LLM_PROVIDER=openrouter \
-  -e MCP_LLM_MODEL_NAME=anthropic/claude-3.7-sonnet \
+  -e MCP_LLM_MODEL_NAME=openai/gpt-4.1 \
   -e MCP_BROWSER_USE_OWN_BROWSER=true \
   -e MCP_BROWSER_CDP_URL=http://localhost:9222 \
   uv --directory . run mcp-server-browser-use
@@ -240,7 +240,8 @@ npx @modelcontextprotocol/inspector@latest \
 
 # Run CLI example
 # Create a .env file with your settings or use environment variables
-uv run mcp-browser-cli run-browser-agent "What is the title of example.com?"
+uv run mcp-browser-cli -e .env run-browser-agent "What is the title of example.com?"
+uv run mcp-browser-cli -e .env run-deep-research "What is the best material for a pan for everyday use on amateur kitchen and dishwasher?"
 ```
 
 ## Troubleshooting

@@ -52,7 +52,7 @@ class LLMSettings(BaseSettings):
 class BrowserSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_BROWSER_")
 
-    headless: bool = Field(default=True, env="HEADLESS") # General headless
+    headless: bool = Field(default=False, env="HEADLESS") # General headless
     disable_security: bool = Field(default=False, env="DISABLE_SECURITY") # General disable security
     binary_path: Optional[str] = Field(default=None, env="BINARY_PATH")
     user_data_dir: Optional[str] = Field(default=None, env="USER_DATA_DIR")
@@ -97,8 +97,8 @@ class PathSettings(BaseSettings):
 
 class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_SERVER_")
-    log_file: Optional[str] = Field(default="mcp_server_browser_use.log", env="LOG_FILE")
-    logging_level: str = Field(default="INFO", env="LOGGING_LEVEL")
+    log_file: Optional[str] = Field(default=None, env="LOG_FILE")
+    logging_level: str = Field(default="ERROR", env="LOGGING_LEVEL")
     anonymized_telemetry: bool = Field(default=True, env="ANONYMIZED_TELEMETRY")
     mcp_config: Optional[Dict[str, Any]] = Field(default=None, env="MCP_CONFIG") # For controller's MCP client
 
