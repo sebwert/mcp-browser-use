@@ -7,8 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_LLM_")
 
-    provider: str = Field(default="anthropic", env="PROVIDER")
-    model_name: str = Field(default="claude-3-7-sonnet-20250219", env="MODEL_NAME")
+    provider: str = Field(default="openai", env="PROVIDER")
+    model_name: str = Field(default="gpt-4.1", env="MODEL_NAME")
     temperature: float = Field(default=0.0, env="TEMPERATURE")
     base_url: Optional[str] = Field(default=None, env="BASE_URL")
     api_key: Optional[SecretStr] = Field(default=None, env="API_KEY") # Generic API key
@@ -62,7 +62,7 @@ class BrowserSettings(BaseSettings):
     cdp_url: Optional[str] = Field(default=None, env="CDP_URL")
     wss_url: Optional[str] = Field(default=None, env="WSS_URL") # For CDP connection if needed
     keep_open: bool = Field(default=False, env="KEEP_OPEN") # Server-managed browser persistence
-    trace_path: Optional[str] = Field(default="./tmp/trace", env="TRACE_PATH")
+    trace_path: Optional[str] = Field(default=None, env="TRACE_PATH")
 
 
 class AgentToolSettings(BaseSettings):
@@ -80,19 +80,19 @@ class AgentToolSettings(BaseSettings):
 
     enable_recording: bool = Field(default=False, env="ENABLE_RECORDING")
     save_recording_path: Optional[str] = Field(default=None, env="SAVE_RECORDING_PATH") # e.g. ./tmp/recordings
-    history_path: str = Field(default="./tmp/agent_history", env="HISTORY_PATH")
+    history_path: str = Field(default=None, env="HISTORY_PATH")
 
 
 class DeepResearchToolSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_RESEARCH_TOOL_")
 
     max_parallel_browsers: int = Field(default=3, env="MAX_PARALLEL_BROWSERS")
-    save_dir: str = Field(default="./tmp/deep_research", env="SAVE_DIR") # Base dir, task_id will be appended
+    save_dir: str = Field(default=None, env="SAVE_DIR") # Base dir, task_id will be appended
 
 
 class PathSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_PATHS_")
-    downloads: str = Field(default="./tmp/downloads", env="DOWNLOADS")
+    downloads: str = Field(default=None, env="DOWNLOADS")
 
 
 class ServerSettings(BaseSettings):

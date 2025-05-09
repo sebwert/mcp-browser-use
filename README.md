@@ -226,21 +226,20 @@ uv sync --dev
 
 # Install playwright browsers
 uv run patchright install chromium --with-deps --no-shell
-
 # Run MCP server with debugger (Example connecting to own browser via CDP)
 # 1. Launch Chrome: google-chrome --remote-debugging-port=9222
-# 2. Create a .env file with your settings, e.g.:
-#    MCP_LLM_OPENROUTER_API_KEY=YOUR_KEY
-#    MCP_LLM_PROVIDER=openrouter
-#    MCP_LLM_MODEL_NAME=anthropic/claude-3.7-sonnet
-#    MCP_BROWSER_USE_OWN_BROWSER=true
-#    MCP_BROWSER_CDP_URL=http://localhost:9222
-# 3. Run inspector command:
-npx @modelcontextprotocol/inspector@latest uv --directory . run mcp-server-browser-use
+# 2. Run inspector command with environment variables:
+npx @modelcontextprotocol/inspector@latest \
+  -e MCP_LLM_OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  -e MCP_LLM_PROVIDER=openrouter \
+  -e MCP_LLM_MODEL_NAME=anthropic/claude-3.7-sonnet \
+  -e MCP_BROWSER_USE_OWN_BROWSER=true \
+  -e MCP_BROWSER_CDP_URL=http://localhost:9222 \
+  uv --directory . run mcp-server-browser-use
 # Note: Change timeout in inspector's config panel if needed (default is 10 seconds)
 
 # Run CLI example
-# Ensure .env is configured or use -e option
+# Create a .env file with your settings or use environment variables
 uv run mcp-browser-cli run-browser-agent "What is the title of example.com?"
 ```
 

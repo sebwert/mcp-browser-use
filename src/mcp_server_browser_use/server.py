@@ -177,6 +177,7 @@ def serve() -> FastMCP:
     @server.tool()
     async def run_browser_agent(ctx: Context, task: str) -> str:
         logger.info(f"Received run_browser_agent task: {task[:100]}...")
+        agent_task_id = str(uuid.uuid4())
         final_result = "Error: Agent execution failed."
 
         browser_instance: Optional[CustomBrowser] = None
