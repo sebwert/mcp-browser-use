@@ -5,6 +5,8 @@ import os
 import traceback
 import uuid
 from typing import Any, Dict, Optional
+from pathlib import Path
+
 
 from .config import settings # Import global AppSettings instance
 
@@ -105,7 +107,7 @@ async def get_browser_and_context() -> tuple[CustomBrowser, CustomBrowserContext
         context_cfg = CustomBrowserContextConfig(
             trace_path=settings.browser.trace_path,
             save_downloads_path=settings.paths.downloads,
-            # Recording path for CDP might be complex, deferring for now
+            save_recording_path=settings.agent_tool.save_recording_path if settings.agent_tool.enable_recording else None,
         )
         current_context = await current_browser.new_context(config=context_cfg)
 
@@ -115,8 +117,8 @@ async def get_browser_and_context() -> tuple[CustomBrowser, CustomBrowserContext
             # Ensure browser is still connected
             if not shared_browser_instance.is_connected():
                 logger.warning("Shared browser was disconnected. Recreating.")
-                await shared_browser_instance.close()
                 if shared_context_instance: await shared_context_instance.close() # Close old context too
+                await shared_browser_instance.close() # Close browser after context
                 shared_browser_instance = None
                 shared_context_instance = None
             else:
@@ -201,9 +203,14 @@ def serve() -> FastMCP:
                 planner_llm_config = settings.get_llm_config(is_planner=True)
                 planner_llm = internal_llm_provider.get_llm_model(**planner_llm_config)
 
-            task_history_dir = os.path.join(settings.agent_tool.history_path, agent_task_id)
-            os.makedirs(task_history_dir, exist_ok=True)
-            agent_history_json_file = os.path.join(task_history_dir, f"{agent_task_id}.json")
+            agent_history_json_file = None
+            task_history_base_path = settings.agent_tool.history_path
+
+            if task_history_base_path:
+                task_specific_history_dir = Path(task_history_base_path) / agent_task_id
+                task_specific_history_dir.mkdir(parents=True, exist_ok=True)
+                agent_history_json_file = str(task_specific_history_dir / f"{agent_task_id}.json")
+                logger.info(f"Agent history will be saved to: {agent_history_json_file}")
 
             agent_instance = BrowserUseAgent(
                 task=task,
@@ -214,11 +221,12 @@ def serve() -> FastMCP:
                 planner_llm=planner_llm,
                 max_actions_per_step=settings.agent_tool.max_actions_per_step,
                 use_vision=settings.agent_tool.use_vision,
-                # Callbacks can be added here if server needs to react to steps
             )
 
             history: AgentHistoryList = await agent_instance.run(max_steps=settings.agent_tool.max_steps)
-            agent_instance.save_history(agent_history_json_file)
+
+            if agent_history_json_file:
+                agent_instance.save_history(agent_history_json_file)
 
             final_result = history.final_result() or "Agent finished without a final result."
             logger.info(f"Agent task completed. Result: {final_result[:100]}...")
@@ -247,7 +255,7 @@ def serve() -> FastMCP:
         max_parallel_browsers_override: Optional[int] = None,
     ) -> str:
         logger.info(f"Received run_deep_research task: {research_task[:100]}...")
-        task_id = str(uuid.uuid4())
+        task_id = str(uuid.uuid4()) # This task_id is used for the sub-directory name
         report_content = "Error: Deep research failed."
 
         try:
@@ -285,29 +293,36 @@ def serve() -> FastMCP:
 
             current_max_parallel_browsers = max_parallel_browsers_override if max_parallel_browsers_override is not None else settings.research_tool.max_parallel_browsers
 
-            save_dir_for_task = os.path.join(settings.research_tool.save_dir, task_id)
-            os.makedirs(save_dir_for_task, exist_ok=True)
+            # Construct the full save directory path for this specific task
+            save_dir_for_this_task = str(Path(settings.research_tool.save_dir) / task_id)
+            # DeepResearchAgent.run expects this `save_dir` to be the task-specific one.
 
-            logger.info(f"Deep research save directory: {save_dir_for_task}")
+            logger.info(f"Deep research save directory for this task: {save_dir_for_this_task}")
             logger.info(f"Using max_parallel_browsers: {current_max_parallel_browsers}")
 
 
             result_dict = await agent_instance.run(
                 topic=research_task,
+                save_dir=save_dir_for_this_task, # Pass full task-specific path
                 task_id=task_id, # Pass the generated task_id
-                save_dir=save_dir_for_task,
                 max_parallel_browsers=current_max_parallel_browsers
             )
 
-            report_file_path = result_dict.get("report_file_path")
-            if report_file_path and os.path.exists(report_file_path):
+            report_file_path = result_dict.get("report_file_path") # This is the full path from the agent
+            if report_file_path and Path(report_file_path).exists():
                 with open(report_file_path, "r", encoding="utf-8") as f:
                     markdown_content = f.read()
                 report_content = f"Deep research report generated successfully at {report_file_path}\n\n{markdown_content}"
                 logger.info(f"Deep research task {task_id} completed. Report at {report_file_path}")
+            elif result_dict.get("status") == "completed" and result_dict.get("final_report"):
+                report_content = f"Deep research completed. Report content:\n\n{result_dict['final_report']}"
+                if report_file_path:
+                     report_content += f"\n(Expected report file at: {report_file_path})"
+                logger.info(f"Deep research task {task_id} completed. Report content retrieved directly.")
             else:
-                report_content = f"Deep research completed, but report file not found. Result: {result_dict}"
-                logger.warning(f"Deep research task {task_id} result: {result_dict}, report file path missing or invalid.")
+                report_content = f"Deep research task {task_id} result: {result_dict}. Report file not found or content not available."
+                logger.warning(report_content)
+
 
         except Exception as e:
             logger.error(f"Error in run_deep_research: {e}\n{traceback.format_exc()}")
@@ -321,6 +336,14 @@ server_instance = serve() # Renamed from 'server' to avoid conflict with 'settin
 
 def main():
     logger.info("Starting MCP server for browser-use...")
+    try:
+        # Accessing a mandatory field early to ensure it's set
+        _ = settings.research_tool.save_dir
+        logger.info(f"Research tool save directory configured: {settings.research_tool.save_dir}")
+    except Exception as e:
+        logger.error(f"Configuration error: {e}. Please ensure all mandatory environment variables like MCP_RESEARCH_TOOL_SAVE_DIR are set.")
+        return # Exit if mandatory config is missing
+
     logger.info(f"Loaded settings with LLM provider: {settings.llm.provider}, Model: {settings.llm.model_name}")
     logger.info(f"Browser keep_open: {settings.browser.keep_open}, Use own browser: {settings.browser.use_own_browser}")
     if settings.browser.use_own_browser:

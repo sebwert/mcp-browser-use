@@ -65,7 +65,13 @@ def main_callback(
         logger.info(f"Loaded environment variables from: {env_file}")
 
     # Reload settings after .env might have been loaded and to apply overrides
-    cli_state.settings = AppSettings()
+    try:
+        cli_state.settings = AppSettings()
+    except Exception as e:
+        # This can happen if mandatory fields (like MCP_RESEARCH_TOOL_SAVE_DIR) are not set
+        sys.stderr.write(f"Error loading application settings: {e}\n")
+        sys.stderr.write("Please ensure all mandatory environment variables are set (e.g., MCP_RESEARCH_TOOL_SAVE_DIR).\n")
+        raise typer.Exit(code=1)
 
     # Setup logging based on final settings (env file, then env vars, then CLI override)
     final_log_level = log_level if log_level else cli_state.settings.server.logging_level
@@ -78,33 +84,45 @@ def main_callback(
         raise typer.Exit(code=1)
 
 
-async def cli_ask_human_callback(query: str) -> str:
+async def cli_ask_human_callback(query: str, browser_context: Any) -> Dict[str, Any]:
     """Callback for agent to ask human for input via CLI."""
+    # browser_context is part of the signature from browser-use, might not be needed here
     print(typer.style(f"\n🤖 AGENT ASKS: {query}", fg=typer.colors.YELLOW))
-    response = typer.prompt(typer.style("Your response", fg=typer.colors.CYAN))
-    return response
+    response_text = typer.prompt(typer.style("Your response", fg=typer.colors.CYAN))
+    return {"response": response_text}
 
-def cli_on_step_callback(browser_state: BrowserState, agent_output: AgentOutput, step_num: int):
+def cli_on_step_callback(agent_instance: BrowserUseAgent): # Changed signature to match AgentHookFunc
     """CLI callback for BrowserUseAgent steps."""
+    # agent_instance.state.history.last_step() gives AgentHistory object
+    # agent_instance.state.last_result gives ActionResult
+    # agent_instance.state.n_steps gives current step number
+
+    last_step_history = agent_instance.state.history.last_step()
+    if not last_step_history:
+        return
+
+    step_num = agent_instance.state.n_steps
     print(typer.style(f"\n--- Step {step_num} ---", fg=typer.colors.BLUE, bold=True))
-    # Print current state if available
-    if hasattr(agent_output, "current_state") and agent_output.current_state:
-        print(typer.style("🧠 Agent State:", fg=typer.colors.MAGENTA))
-        print(agent_output.current_state)
-    # Print actions
-    if hasattr(agent_output, "action") and agent_output.action:
+
+    if last_step_history.current_state:
+        print(typer.style("🧠 Agent State (Thought):", fg=typer.colors.MAGENTA))
+        print(last_step_history.current_state)
+
+    if last_step_history.action_model: # action_model is List[ActionModel]
         print(typer.style("🎬 Actions:", fg=typer.colors.GREEN))
-        for action in agent_output.action:
-            # Try to get action_type and action_input if present, else print the action itself
-            action_type = getattr(action, "action_type", None)
-            action_input = getattr(action, "action_input", None)
-            if action_type is not None or action_input is not None:
-                print(f"  - {action_type or 'Unknown action'}: {action_input or ''}")
-            else:
-                print(f"  - {action}")
-    # Optionally print observation if present in browser_state
-    if hasattr(browser_state, "observation") and browser_state.observation:
-        obs = browser_state.observation
+        for action_item in last_step_history.action_model:
+            # ActionModel is a Pydantic model, iterate its fields
+            action_details = []
+            for action_name, params in action_item.model_dump(exclude_unset=True, exclude_none=True).items():
+                if params is not None and action_name != "action_type": # action_type is often redundant here
+                     action_details.append(f"{action_name}: {params}")
+            if action_details:
+                print(f"  - {', '.join(action_details)}")
+            else: # Fallback if model_dump is empty for some reason
+                print(f"  - {action_item}")
+
+    if last_step_history.action_result and last_step_history.action_result.observation:
+        obs = last_step_history.action_result.observation
         print(typer.style("👀 Observation:", fg=typer.colors.CYAN))
         print(str(obs)[:200] + "..." if obs and len(str(obs)) > 200 else obs)
 
@@ -162,10 +180,14 @@ async def _run_browser_agent_logic_cli(task_str: str, current_settings: AppSetti
         )
         context_instance = await browser_instance.new_context(config=context_cfg)
 
-        # Paths
-        task_history_dir = os.path.join(current_settings.agent_tool.history_path, agent_task_id)
-        os.makedirs(task_history_dir, exist_ok=True)
-        agent_history_json_file = os.path.join(task_history_dir, f"{agent_task_id}.json")
+        agent_history_json_file = None
+        task_history_base_path = current_settings.agent_tool.history_path
+
+        if task_history_base_path:
+            task_specific_history_dir = Path(task_history_base_path) / agent_task_id
+            task_specific_history_dir.mkdir(parents=True, exist_ok=True)
+            agent_history_json_file = str(task_specific_history_dir / f"{agent_task_id}.json")
+            logger.info(f"Agent history will be saved to: {agent_history_json_file}")
 
         # Agent Instantiation
         agent_instance = BrowserUseAgent(
@@ -174,7 +196,7 @@ async def _run_browser_agent_logic_cli(task_str: str, current_settings: AppSetti
             planner_llm=planner_llm,
             max_actions_per_step=current_settings.agent_tool.max_actions_per_step,
             use_vision=current_settings.agent_tool.use_vision,
-            register_new_step_callback=cli_on_step_callback
+            register_new_step_callback=cli_on_step_callback,
         )
 
         # Run Agent
@@ -302,4 +324,8 @@ if __name__ == "__main__":
     # Set a default log level if run directly for dev purposes, can be overridden by CLI args
     if not os.getenv("MCP_SERVER_LOGGING_LEVEL"): # Check if already set
         os.environ["MCP_SERVER_LOGGING_LEVEL"] = "DEBUG"
+    if not os.getenv("MCP_RESEARCH_TOOL_SAVE_DIR"): # Ensure mandatory var is set for local dev
+        print("Warning: MCP_RESEARCH_TOOL_SAVE_DIR not set. Defaulting to './tmp/deep_research_cli_default' for this run.", file=sys.stderr)
+        os.environ["MCP_RESEARCH_TOOL_SAVE_DIR"] = "./tmp/deep_research_cli_default"
+
     app()

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, ValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -80,19 +80,25 @@ class AgentToolSettings(BaseSettings):
 
     enable_recording: bool = Field(default=False, env="ENABLE_RECORDING")
     save_recording_path: Optional[str] = Field(default=None, env="SAVE_RECORDING_PATH") # e.g. ./tmp/recordings
-    history_path: str = Field(default=None, env="HISTORY_PATH")
+    history_path: Optional[str] = Field(default=None, env="HISTORY_PATH") # e.g. ./tmp/agent_history
 
 
 class DeepResearchToolSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_RESEARCH_TOOL_")
 
     max_parallel_browsers: int = Field(default=3, env="MAX_PARALLEL_BROWSERS")
-    save_dir: str = Field(default=None, env="SAVE_DIR") # Base dir, task_id will be appended
+    save_dir: str = Field(default=..., env="SAVE_DIR") # Base dir, task_id will be appended. Mandatory.
+
+    @field_validator('save_dir')
+    def check_save_dir(cls, v: str, info: ValidationInfo) -> str:
+        if not v: # Should be caught by '...' default, but as a safeguard
+            raise ValueError(f"{info.field_name} must be set via MCP_RESEARCH_TOOL_SAVE_DIR environment variable.")
+        return v
 
 
 class PathSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_PATHS_")
-    downloads: str = Field(default=None, env="DOWNLOADS")
+    downloads: Optional[str] = Field(default=None, env="DOWNLOADS") # e.g. ./tmp/downloads
 
 
 class ServerSettings(BaseSettings):
@@ -207,14 +213,19 @@ settings = AppSettings()
 
 # Example usage (for testing this file directly):
 if __name__ == "__main__":
-    print("Loaded AppSettings:")
-    print(settings.model_dump_json(indent=2))
-    print(f"\nLLM API Key for main provider ({settings.llm.provider}): {settings.get_api_key_for_provider(settings.llm.provider)}")
-    if settings.llm.planner_provider:
-        print(f"LLM API Key for planner provider ({settings.llm.planner_provider}): {settings.get_api_key_for_provider(settings.llm.planner_provider, is_planner=True)}")
+    try:
+        print("Loaded AppSettings:")
+        print(settings.model_dump_json(indent=2))
+        print(f"\nLLM API Key for main provider ({settings.llm.provider}): {settings.get_api_key_for_provider(settings.llm.provider)}")
+        if settings.llm.planner_provider:
+            print(f"LLM API Key for planner provider ({settings.llm.planner_provider}): {settings.get_api_key_for_provider(settings.llm.planner_provider, is_planner=True)}")
 
-    print("\nMain LLM Config for get_llm_model:")
-    print(settings.get_llm_config())
-    if settings.llm.planner_provider:
-        print("\nPlanner LLM Config for get_llm_model:")
-        print(settings.get_llm_config(is_planner=True))
+        print("\nMain LLM Config for get_llm_model:")
+        print(settings.get_llm_config())
+        if settings.llm.planner_provider:
+            print("\nPlanner LLM Config for get_llm_model:")
+            print(settings.get_llm_config(is_planner=True))
+    except Exception as e:
+        print(f"Error during settings load or test: {e}")
+        import os
+        print("MCP_RESEARCH_TOOL_SAVE_DIR:", os.getenv("MCP_RESEARCH_TOOL_SAVE_DIR"))

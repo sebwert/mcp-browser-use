@@ -69,6 +69,8 @@ async def run_single_browser_task(
     wss_url = browser_config.get("wss_url", None)
     cdp_url = browser_config.get("cdp_url", None)
     disable_security = browser_config.get("disable_security", False)
+    save_downloads_path = browser_config.get("save_downloads_path", None)
+    trace_path = browser_config.get("trace_path", None)
 
     bu_browser = None
     bu_browser_context = None
@@ -97,7 +99,8 @@ async def run_single_browser_task(
         )
 
         context_config = CustomBrowserContextConfig(
-            save_downloads_path="./tmp/downloads",
+            save_downloads_path=save_downloads_path,
+            trace_path=trace_path,
             browser_window_size=BrowserContextWindowSize(width=window_w, height=window_h),
             force_new_context=True
         )
@@ -169,7 +172,7 @@ async def run_single_browser_task(
                 logger.error(f"Error closing browser context: {e}")
         if bu_browser:
             try:
-                await bu_browser.close()
+                await bu_browser._close_without_httpxclients()
                 bu_browser = None
                 logger.info("Closed browser.")
             except Exception as e:
@@ -843,22 +846,22 @@ class DeepResearchAgent:
         app = workflow.compile()
         return app
 
-    async def run(self, topic: str, task_id: Optional[str] = None, save_dir: str = "./tmp/deep_research",
-                  max_parallel_browsers: int = 1) -> Dict[
+    async def run(self, topic: str, save_dir: str, task_id: Optional[str] = None, max_parallel_browsers: int = 1) -> Dict[
         str, Any]:
         """
-        Starts the deep research process (Async Generator Version).
+        Starts the deep research process.
 
         Args:
             topic: The research topic.
+            save_dir: The directory to save outputs for this task.
             task_id: Optional existing task ID to resume. If None, a new ID is generated.
+            max_parallel_browsers: Max parallel browsers for the search tool.
 
-        Yields:
-             Intermediate state updates or messages during execution.
+        Returns:
+             A dictionary containing the final status, message, task_id, and final_state.
         """
         if self.runner and not self.runner.done():
             logger.warning("Agent is already running. Please stop the current task first.")
-            # Return an error status instead of yielding
             return {"status": "error", "message": "Agent already running.", "task_id": self.current_task_id}
 
         self.current_task_id = task_id if task_id else str(uuid.uuid4())

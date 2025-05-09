@@ -14,9 +14,9 @@ from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, Type
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
-	BaseMessage,
-	HumanMessage,
-	SystemMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
 )
 
 # from lmnr.sdk.decorators import observe
@@ -28,17 +28,17 @@ from browser_use.agent.message_manager.service import MessageManager, MessageMan
 from browser_use.agent.message_manager.utils import convert_input_messages, extract_json_from_model_output, save_conversation
 from browser_use.agent.prompts import AgentMessagePrompt, PlannerPrompt, SystemPrompt
 from browser_use.agent.views import (
-	REQUIRED_LLM_API_ENV_VARS,
-	ActionResult,
-	AgentError,
-	AgentHistory,
-	AgentHistoryList,
-	AgentOutput,
-	AgentSettings,
-	AgentState,
-	AgentStepInfo,
-	StepMetadata,
-	ToolCallingMethod,
+    REQUIRED_LLM_API_ENV_VARS,
+    ActionResult,
+    AgentError,
+    AgentHistory,
+    AgentHistoryList,
+    AgentOutput,
+    AgentSettings,
+    AgentState,
+    AgentStepInfo,
+    StepMetadata,
+    ToolCallingMethod,
 )
 from browser_use.browser.browser import Browser
 from browser_use.browser.context import BrowserContext
@@ -46,15 +46,15 @@ from browser_use.browser.views import BrowserState, BrowserStateHistory
 from browser_use.controller.registry.views import ActionModel
 from browser_use.controller.service import Controller
 from browser_use.dom.history_tree_processor.service import (
-	DOMHistoryElement,
-	HistoryTreeProcessor,
+    DOMHistoryElement,
+    HistoryTreeProcessor,
 )
 from browser_use.exceptions import LLMException
 from browser_use.telemetry.service import ProductTelemetry
 from browser_use.telemetry.views import (
-	AgentEndTelemetryEvent,
-	AgentRunTelemetryEvent,
-	AgentStepTelemetryEvent,
+    AgentEndTelemetryEvent,
+    AgentRunTelemetryEvent,
+    AgentStepTelemetryEvent,
 )
 from browser_use.utils import check_env_variables, time_execution_async, time_execution_sync
 from browser_use.agent.service import Agent, AgentHookFunc
@@ -88,7 +88,7 @@ class BrowserUseAgent(Agent):
         signal_handler.register()
 
         # Wait for verification task to complete if it exists
-        if hasattr(self, '_verification_task') and not self._verification_task.done():
+        if hasattr(self, '_verification_task') and self._verification_task and not self._verification_task.done():
             try:
                 await self._verification_task
             except Exception:

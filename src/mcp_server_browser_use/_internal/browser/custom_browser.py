@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import pdb
 
 from playwright.async_api import Browser as PlaywrightBrowser
@@ -98,3 +99,32 @@ class CustomBrowser(Browser):
             handle_sigint=False,
         )
         return browser
+
+    async def _close_without_httpxclients(self):
+        if self.config.keep_alive:
+            return
+
+        try:
+            if self.playwright_browser:
+                await self.playwright_browser.close()
+                del self.playwright_browser
+            if self.playwright:
+                await self.playwright.stop()
+                del self.playwright
+            if chrome_proc := getattr(self, '_chrome_subprocess', None):
+                try:
+                    # always kill all children processes, otherwise chrome leaves a bunch of zombie processes
+                    for proc in chrome_proc.children(recursive=True):
+                        proc.kill()
+                    chrome_proc.kill()
+                except Exception as e:
+                    logger.debug(f'Failed to terminate chrome subprocess: {e}')
+
+        except Exception as e:
+            logger.debug(f'Failed to close browser properly: {e}')
+
+        finally:
+            self.playwright_browser = None
+            self.playwright = None
+            self._chrome_subprocess = None
+            gc.collect()

@@ -23,6 +23,7 @@ AI-driven browser automation server implementing the Model Context Protocol (MCP
 -   ⚙️ **Environment Variable Configuration** - Fully configurable via environment variables using a structured Pydantic model.
 -   🔗 **CDP Connection** - Ability to connect to and control a user-launched Chrome/Chromium instance via Chrome DevTools Protocol.
 -   ⌨️ **CLI Interface** - Access core agent functionalities (`run_browser_agent`, `run_deep_research`) directly from the command line for testing and scripting.
+-   🖼️ **Conditional GIF Generation** - Optionally generate GIFs of agent browser interactions, saved to the history path.
 
 ## Quick Start
 
@@ -54,8 +55,9 @@ You can configure clients like Claude Desktop to connect to this server. Add the
       //   "mcp-server-browser-use"
       // ],
       "env": {
-        // --- CRITICAL: Add required API keys here ---
+        // --- CRITICAL: Add required API keys and paths here ---
         "MCP_LLM_OPENROUTER_API_KEY": "YOUR_OPENROUTER_API_KEY",
+        "MCP_RESEARCH_TOOL_SAVE_DIR": "/path/to/your/research_outputs", // MANDATORY
         // "MCP_LLM_OPENAI_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENAI",
         // "MCP_LLM_ANTHROPIC_API_KEY": "YOUR_KEY_HERE_IF_USING_ANTHROPIC",
         // ... add other keys based on MCP_LLM_PROVIDER ...
@@ -64,6 +66,8 @@ You can configure clients like Claude Desktop to connect to this server. Add the
         "MCP_LLM_PROVIDER": "openrouter", // Use OpenRouter as provider
         "MCP_LLM_MODEL_NAME": "google/gemini-1.5-pro", // Example OpenRouter model
         "MCP_BROWSER_HEADLESS": "true",    // Default: run browser without UI
+        // "MCP_AGENT_TOOL_HISTORY_PATH": "/path/to/agent_history", // Optional: to save agent history JSONs and GIFs
+        // "MCP_AGENT_TOOL_GENERATE_GIF": "true", // Optional: to generate GIFs if history path is set
 
         // --- Example for connecting to your own browser ---
         // "MCP_BROWSER_USE_OWN_BROWSER": "true",
@@ -78,7 +82,7 @@ You can configure clients like Claude Desktop to connect to this server. Add the
 }
 ```
 
-**Important:** Ensure the `command` and `args` correctly point to how you want to run the server. Set the necessary API keys in the `env` section using the new structured variable names (e.g., `MCP_LLM_PROVIDER`, `MCP_LLM_OPENAI_API_KEY`).
+**Important:** Ensure the `command` and `args` correctly point to how you want to run the server. Set the necessary API keys and the **mandatory** `MCP_RESEARCH_TOOL_SAVE_DIR` in the `env` section.
 
 ## MCP Tools
 
@@ -90,11 +94,10 @@ This server exposes the following tools via the Model Context Protocol:
     *   **Description:** Executes a browser automation task based on natural language instructions and waits for it to complete. Uses settings from `MCP_AGENT_TOOL_*`, `MCP_LLM_*`, and `MCP_BROWSER_*` environment variables.
     *   **Arguments:**
         *   `task` (string, required): The primary task or objective.
-        *   `add_infos` (string, optional): Additional context or hints for the agent.
-    *   **Returns:** (string) The final result extracted by the agent or an error message.
+    *   **Returns:** (string) The final result extracted by the agent or an error message. Agent history (JSON, optional GIF) saved if `MCP_AGENT_TOOL_HISTORY_PATH` is set.
 
 2.  **`run_deep_research`**
-    *   **Description:** Performs in-depth web research on a topic, generates a report, and waits for completion. Uses settings from `MCP_RESEARCH_TOOL_*`, `MCP_LLM_*`, and `MCP_BROWSER_*` environment variables.
+    *   **Description:** Performs in-depth web research on a topic, generates a report, and waits for completion. Uses settings from `MCP_RESEARCH_TOOL_*`, `MCP_LLM_*`, and `MCP_BROWSER_*` environment variables. All outputs are saved to a subdirectory within the **mandatory** `MCP_RESEARCH_TOOL_SAVE_DIR`.
     *   **Arguments:**
         *   `research_task` (string, required): The topic or question for the research.
         *   `max_parallel_browsers` (integer, optional): Overrides `MCP_RESEARCH_TOOL_MAX_PARALLEL_BROWSERS` from environment.
@@ -114,8 +117,6 @@ This package also provides a command-line interface `mcp-browser-cli` for direct
     *   **Description:** Runs a browser agent task.
     *   **Arguments:**
         *   `TASK` (string, required): The primary task for the agent.
-    *   **Options:**
-        *   `--add-infos TEXT, -a TEXT`: Additional context or hints.
     *   **Example:**
         ```bash
         mcp-browser-cli run-browser-agent "Go to example.com and find the title." -e .env
@@ -132,7 +133,7 @@ This package also provides a command-line interface `mcp-browser-cli` for direct
         mcp-browser-cli run-deep-research "What are the latest advancements in AI-driven browser automation?" --max-parallel-browsers 5 -e .env
         ```
 
-All other configurations (LLM keys, paths, browser settings) are picked up from environment variables (or the specified `.env` file) as detailed in the Configuration section.
+All other configurations (LLM keys, paths, browser settings) are picked up from environment variables (or the specified `.env` file) as detailed in the Configuration section. **Remember to set `MCP_RESEARCH_TOOL_SAVE_DIR`.**
 
 ## Configuration (Environment Variables)
 
@@ -141,8 +142,8 @@ Configure the server and CLI using environment variables. You can set these in y
 | Variable Group (Prefix)             | Example Variable                               | Description                                                                                                | Default Value                     |
 | :---------------------------------- | :--------------------------------------------- | :--------------------------------------------------------------------------------------------------------- | :-------------------------------- |
 | **Main LLM (MCP_LLM_)**             |                                                | Settings for the primary LLM used by agents.                                                               |                                   |
-|                                     | `MCP_LLM_PROVIDER`                             | LLM provider. Options: `openai`, `azure_openai`, `anthropic`, `google`, `mistral`, `ollama`, etc.         | `anthropic`                       |
-|                                     | `MCP_LLM_MODEL_NAME`                           | Specific model name for the provider.                                                                      | `claude-3-7-sonnet-20250219`      |
+|                                     | `MCP_LLM_PROVIDER`                             | LLM provider. Options: `openai`, `azure_openai`, `anthropic`, `google`, `mistral`, `ollama`, etc.         | `openai`                          |
+|                                     | `MCP_LLM_MODEL_NAME`                           | Specific model name for the provider.                                                                      | `gpt-4.1`                         |
 |                                     | `MCP_LLM_TEMPERATURE`                          | LLM temperature (0.0-2.0).                                                                                 | `0.0`                             |
 |                                     | `MCP_LLM_BASE_URL`                             | Optional: Generic override for LLM provider's base URL.                                                    | Provider-specific                 |
 |                                     | `MCP_LLM_API_KEY`                              | Optional: Generic LLM API key (takes precedence).                                                          | -                                 |
@@ -157,16 +158,16 @@ Configure the server and CLI using environment variables. You can set these in y
 |                                     | `MCP_LLM_PLANNER_PROVIDER`                     | Planner LLM provider.                                                                                      | Main LLM Provider                 |
 |                                     | `MCP_LLM_PLANNER_MODEL_NAME`                   | Planner LLM model name.                                                                                    | Main LLM Model                    |
 | **Browser (MCP_BROWSER_)**          |                                                | General browser settings.                                                                                  |                                   |
-|                                     | `MCP_BROWSER_HEADLESS`                         | Run browser without UI (general setting).                                                                  | `true`                            |
+|                                     | `MCP_BROWSER_HEADLESS`                         | Run browser without UI (general setting).                                                                  | `false`                           |
 |                                     | `MCP_BROWSER_DISABLE_SECURITY`                 | Disable browser security features (general setting, use cautiously).                                       | `false`                           |
 |                                     | `MCP_BROWSER_BINARY_PATH`                      | Path to Chrome/Chromium executable.                                                                        | -                                 |
 |                                     | `MCP_BROWSER_USER_DATA_DIR`                    | Path to Chrome user data directory.                                                                        | -                                 |
 |                                     | `MCP_BROWSER_WINDOW_WIDTH`                     | Browser window width (pixels).                                                                             | `1280`                            |
-|                                     | `MCP_BROWSER_WINDOW_HEIGHT`                    | Browser window height (pixels).                                                                            | `720`                             |
+|                                     | `MCP_BROWSER_WINDOW_HEIGHT`                    | Browser window height (pixels).                                                                            | `1080`                            |
 |                                     | `MCP_BROWSER_USE_OWN_BROWSER`                  | Connect to user's browser via CDP URL.                                                                     | `false`                           |
 |                                     | `MCP_BROWSER_CDP_URL`                          | CDP URL (e.g., `http://localhost:9222`). Required if `MCP_BROWSER_USE_OWN_BROWSER=true`.                  | -                                 |
 |                                     | `MCP_BROWSER_KEEP_OPEN`                        | Keep server-managed browser open between MCP calls (if `MCP_BROWSER_USE_OWN_BROWSER=false`).               | `false`                           |
-|                                     | `MCP_BROWSER_TRACE_PATH`                       | Directory to save Playwright trace files.                                                                  | `./tmp/trace`                     |
+|                                     | `MCP_BROWSER_TRACE_PATH`                       | Optional: Directory to save Playwright trace files. If not set, tracing to file is disabled.               | ` ` (empty, tracing disabled)     |
 | **Agent Tool (MCP_AGENT_TOOL_)**    |                                                | Settings for the `run_browser_agent` tool.                                                                 |                                   |
 |                                     | `MCP_AGENT_TOOL_MAX_STEPS`                     | Max steps per agent run.                                                                                   | `100`                             |
 |                                     | `MCP_AGENT_TOOL_MAX_ACTIONS_PER_STEP`          | Max actions per agent step.                                                                                | `5`                               |
@@ -176,16 +177,17 @@ Configure the server and CLI using environment variables. You can set these in y
 |                                     | `MCP_AGENT_TOOL_HEADLESS`                      | Override `MCP_BROWSER_HEADLESS` for this tool (true/false/empty).                                          | ` ` (uses general)                |
 |                                     | `MCP_AGENT_TOOL_DISABLE_SECURITY`              | Override `MCP_BROWSER_DISABLE_SECURITY` for this tool (true/false/empty).                                  | ` ` (uses general)                |
 |                                     | `MCP_AGENT_TOOL_ENABLE_RECORDING`              | Enable Playwright video recording.                                                                         | `false`                           |
-|                                     | `MCP_AGENT_TOOL_SAVE_RECORDING_PATH`           | Path to save recordings (Required if `MCP_AGENT_TOOL_ENABLE_RECORDING=true`).                              | -                                 |
-|                                     | `MCP_AGENT_TOOL_HISTORY_PATH`                  | Directory to save agent history JSON files.                                                                | `./tmp/agent_history`             |
+|                                     | `MCP_AGENT_TOOL_SAVE_RECORDING_PATH`           | Optional: Path to save recordings. If not set, recording to file is disabled even if `ENABLE_RECORDING=true`. | ` ` (empty, recording disabled)   |
+|                                     | `MCP_AGENT_TOOL_HISTORY_PATH`                  | Optional: Directory to save agent history JSON files. If not set, history saving is disabled.              | ` ` (empty, history saving disabled) |
+|                                     | `MCP_AGENT_TOOL_GENERATE_GIF`                  | Enable generation of agent history GIF (`true`/`false`). Requires `MCP_AGENT_TOOL_HISTORY_PATH` to be set. | `false`                           |
 | **Research Tool (MCP_RESEARCH_TOOL_)** |                                             | Settings for the `run_deep_research` tool.                                                                 |                                   |
 |                                     | `MCP_RESEARCH_TOOL_MAX_PARALLEL_BROWSERS`      | Max parallel browser instances for deep research.                                                          | `3`                               |
-|                                     | `MCP_RESEARCH_TOOL_SAVE_DIR`                   | Base directory to save research artifacts. Task ID will be appended.                                       | `./tmp/deep_research`             |
+|                                     | `MCP_RESEARCH_TOOL_SAVE_DIR`                   | **Mandatory**: Base directory to save research artifacts. Task ID will be appended.                        | `N/A (Required)`                  |
 | **Paths (MCP_PATHS_)**              |                                                | General path settings.                                                                                     |                                   |
-|                                     | `MCP_PATHS_DOWNLOADS`                          | Directory for downloaded files.                                                                            | `./tmp/downloads`                 |
+|                                     | `MCP_PATHS_DOWNLOADS`                          | Optional: Directory for downloaded files. If not set, persistent downloads to a specific path are disabled.  | ` ` (empty, downloads disabled)  |
 | **Server (MCP_SERVER_)**            |                                                | Server-specific settings.                                                                                  |                                   |
-|                                     | `MCP_SERVER_LOG_FILE`                          | Path for the server log file. Empty for stdout.                                                            | `mcp_server_browser_use.log`      |
-|                                     | `MCP_SERVER_LOGGING_LEVEL`                     | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).                                           | `INFO`                            |
+|                                     | `MCP_SERVER_LOG_FILE`                          | Path for the server log file. Empty for stdout.                                                            | ` ` (empty, logs to stdout)       |
+|                                     | `MCP_SERVER_LOGGING_LEVEL`                     | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).                                           | `ERROR`                           |
 |                                     | `MCP_SERVER_ANONYMIZED_TELEMETRY`              | Enable/disable anonymized telemetry (`true`/`false`).                                                      | `true`                            |
 |                                     | `MCP_SERVER_MCP_CONFIG`                        | Optional: JSON string for MCP client config used by the internal controller.                               | `null`                            |
 
@@ -235,17 +237,19 @@ npx @modelcontextprotocol/inspector@latest \
   -e MCP_LLM_MODEL_NAME=openai/gpt-4.1 \
   -e MCP_BROWSER_USE_OWN_BROWSER=true \
   -e MCP_BROWSER_CDP_URL=http://localhost:9222 \
+  -e MCP_RESEARCH_TOOL_SAVE_DIR=./tmp/dev_research_output \
   uv --directory . run mcp-server-browser-use
 # Note: Change timeout in inspector's config panel if needed (default is 10 seconds)
 
 # Run CLI example
-# Create a .env file with your settings or use environment variables
+# Create a .env file with your settings (including MCP_RESEARCH_TOOL_SAVE_DIR) or use environment variables
 uv run mcp-browser-cli -e .env run-browser-agent "What is the title of example.com?"
 uv run mcp-browser-cli -e .env run-deep-research "What is the best material for a pan for everyday use on amateur kitchen and dishwasher?"
 ```
 
 ## Troubleshooting
 
+-   **Configuration Error on Startup**: If the application fails to start with an error about a missing setting, ensure all **mandatory** environment variables (like `MCP_RESEARCH_TOOL_SAVE_DIR`) are set correctly in your environment or `.env` file.
 -   **Browser Conflicts**: If *not* using CDP (`MCP_BROWSER_USE_OWN_BROWSER=false`), ensure no conflicting Chrome instances are running with the same user data directory if `MCP_BROWSER_USER_DATA_DIR` is specified.
 -   **CDP Connection Issues**: If using `MCP_BROWSER_USE_OWN_BROWSER=true`:
     *   Verify Chrome was launched with `--remote-debugging-port`.
@@ -254,7 +258,10 @@ uv run mcp-browser-cli -e .env run-deep-research "What is the best material for 
 -   **API Errors**: Double-check API keys (`MCP_LLM_<PROVIDER>_API_KEY` or `MCP_LLM_API_KEY`) and endpoints (e.g., `MCP_LLM_AZURE_OPENAI_ENDPOINT` for Azure).
 -   **Vision Issues**: Ensure `MCP_AGENT_TOOL_USE_VISION=true` and your LLM supports vision.
 -   **Dependency Problems**: Run `uv sync` and `uv run playwright install`.
--   **Logging**: Check the log file (`MCP_SERVER_LOG_FILE`) or console output. Increase `MCP_SERVER_LOGGING_LEVEL` to `DEBUG` for more details. For CLI, use `--log-level DEBUG`.
+-   **File/Path Issues**:
+    *   If optional features like history saving, tracing, or downloads are not working, ensure the corresponding path variables (`MCP_AGENT_TOOL_HISTORY_PATH`, `MCP_BROWSER_TRACE_PATH`, `MCP_PATHS_DOWNLOADS`) are set and the application has write permissions to those locations.
+    *   For deep research, ensure `MCP_RESEARCH_TOOL_SAVE_DIR` is set to a valid, writable directory.
+-   **Logging**: Check the log file (`MCP_SERVER_LOG_FILE`, if set) or console output. Increase `MCP_SERVER_LOGGING_LEVEL` to `DEBUG` for more details. For CLI, use `--log-level DEBUG`.
 
 ## License
 
