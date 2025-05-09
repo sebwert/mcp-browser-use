@@ -395,7 +395,8 @@ async def planning_node(state: DeepResearchState) -> Dict[str, Any]:
         logger.info("Resuming with existing plan.")
         # Maybe add logic here to let LLM review and potentially adjust the plan
         # based on existing_results, but for now, we just use the loaded plan.
-        _save_plan_to_md(existing_plan, output_dir)  # Ensure it's saved initially
+        if output_dir:
+            _save_plan_to_md(existing_plan, output_dir)  # Ensure it's saved initially if output_dir exists
         return {"research_plan": existing_plan}  # Return the loaded plan
 
     logger.info(f"Generating new research plan for topic: {topic}")
@@ -442,7 +443,8 @@ async def planning_node(state: DeepResearchState) -> Dict[str, Any]:
             return {"error_message": "Failed to generate research plan structure."}
 
         logger.info(f"Generated research plan with {len(new_plan)} steps.")
-        _save_plan_to_md(new_plan, output_dir)
+        if output_dir:
+            _save_plan_to_md(new_plan, output_dir)
 
         return {
             "research_plan": new_plan,
@@ -469,7 +471,7 @@ async def research_execution_node(state: DeepResearchState) -> Dict[str, Any]:
     current_index = state['current_step_index']
     llm = state['llm']
     tools = state['tools']  # Tools are now passed in state
-    output_dir = str(state['output_dir'])
+    output_dir = str(state['output_dir']) if state['output_dir'] else None
     task_id = state['task_id']
     # Stop event is bound inside the tool function, no need to pass directly here
 
@@ -517,7 +519,8 @@ async def research_execution_node(state: DeepResearchState) -> Dict[str, Any]:
             # Let's mark as failed for now, assuming a tool was expected.
             current_step['status'] = 'failed'
             current_step['result_summary'] = "LLM did not use a tool as expected."
-            _save_plan_to_md(plan, output_dir)
+            if output_dir:
+                _save_plan_to_md(plan, output_dir)
             return {
                 "research_plan": plan,
                 "current_step_index": current_index + 1,
@@ -552,7 +555,8 @@ async def research_execution_node(state: DeepResearchState) -> Dict[str, Any]:
                 if stop_event and stop_event.is_set():
                     logger.info(f"Stop requested before executing tool: {tool_name}")
                     current_step['status'] = 'pending'  # Not completed due to stop
-                    _save_plan_to_md(plan, output_dir)
+                    if output_dir:
+                        _save_plan_to_md(plan, output_dir)
                     return {"stop_requested": True, "research_plan": plan}
 
                 logger.info(f"Executing tool: {tool_name}")
@@ -602,8 +606,9 @@ async def research_execution_node(state: DeepResearchState) -> Dict[str, Any]:
 
             current_step['result_summary'] = f"Executed tool(s): {', '.join(executed_tool_names)}."
 
-        _save_plan_to_md(plan, output_dir)
-        _save_search_results_to_json(current_search_results, output_dir)
+        if output_dir:
+            _save_plan_to_md(plan, output_dir)
+            _save_search_results_to_json(current_search_results, output_dir)
 
         return {
             "research_plan": plan,
@@ -617,7 +622,8 @@ async def research_execution_node(state: DeepResearchState) -> Dict[str, Any]:
         logger.error(f"Unhandled error during research execution node for step {current_step['step']}: {e}",
                      exc_info=True)
         current_step['status'] = 'failed'
-        _save_plan_to_md(plan, output_dir)
+        if output_dir:
+            _save_plan_to_md(plan, output_dir)
         return {
             "research_plan": plan,
             "current_step_index": current_index + 1,  # Move on even if error?
@@ -641,7 +647,8 @@ async def synthesis_node(state: DeepResearchState) -> Dict[str, Any]:
     if not search_results:
         logger.warning("No search results found to synthesize report.")
         report = f"# Research Report: {topic}\n\nNo information was gathered during the research process."
-        _save_report_to_md(report, output_dir)
+        if output_dir:
+            _save_report_to_md(report, output_dir)
         return {"final_report": report}
 
     logger.info(f"Synthesizing report from {len(search_results)} collected search result entries.")
@@ -721,7 +728,8 @@ async def synthesis_node(state: DeepResearchState) -> Dict[str, Any]:
             final_report_md += report_references_section
 
         logger.info("Successfully synthesized the final report.")
-        _save_report_to_md(final_report_md, output_dir)
+        if output_dir:
+            _save_report_to_md(final_report_md, output_dir)
         return {"final_report": final_report_md}
 
     except Exception as e:
@@ -846,14 +854,14 @@ class DeepResearchAgent:
         app = workflow.compile()
         return app
 
-    async def run(self, topic: str, save_dir: str, task_id: Optional[str] = None, max_parallel_browsers: int = 1) -> Dict[
+    async def run(self, topic: str, save_dir: Optional[str] = None, task_id: Optional[str] = None, max_parallel_browsers: int = 1) -> Dict[
         str, Any]:
         """
         Starts the deep research process.
 
         Args:
             topic: The research topic.
-            save_dir: The directory to save outputs for this task.
+            save_dir: Optional directory to save outputs for this task. If None, operates in memory-only mode.
             task_id: Optional existing task ID to resume. If None, a new ID is generated.
             max_parallel_browsers: Max parallel browsers for the search tool.
 
@@ -865,11 +873,16 @@ class DeepResearchAgent:
             return {"status": "error", "message": "Agent already running.", "task_id": self.current_task_id}
 
         self.current_task_id = task_id if task_id else str(uuid.uuid4())
-        output_dir = os.path.join(save_dir, self.current_task_id)
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = None
+
+        if save_dir:
+            output_dir = os.path.join(save_dir, self.current_task_id)
+            os.makedirs(output_dir, exist_ok=True)
+            logger.info(f"[AsyncGen] Output directory: {output_dir}")
+        else:
+            logger.info(f"[AsyncGen] Running in memory-only mode (no save_dir provided)")
 
         logger.info(f"[AsyncGen] Starting research task ID: {self.current_task_id} for topic: '{topic}'")
-        logger.info(f"[AsyncGen] Output directory: {output_dir}")
 
         self.stop_event = threading.Event()
         _AGENT_STOP_FLAGS[self.current_task_id] = self.stop_event
@@ -891,7 +904,8 @@ class DeepResearchAgent:
         }
 
         loaded_state = {}
-        if task_id:
+        if task_id and output_dir:
+            # Only try to resume from files if we have a task_id and output_dir
             logger.info(f"Attempting to resume task {task_id}...")
             loaded_state = _load_previous_state(task_id, output_dir)
             initial_state.update(loaded_state)
@@ -953,13 +967,20 @@ class DeepResearchAgent:
             if self.mcp_client:
                 await self.mcp_client.__aexit__(None, None, None)
 
-            # Return a result dictionary including the status and the final state if available
-            return {
+            # Construct result with report_file_path if available
+            result = {
                 "status": status,
                 "message": message,
                 "task_id": task_id_to_clean,  # Use the stored task_id
                 "final_state": final_state if final_state else {}  # Return the final state dict
             }
+
+            # Add report file path if we have an output directory and a final report was generated
+            if output_dir and final_state and final_state.get("final_report"):
+                report_path = os.path.join(output_dir, REPORT_FILENAME)
+                result["report_file_path"] = report_path
+
+            return result
 
     async def _stop_lingering_browsers(self, task_id):
         """Attempts to stop any BrowserUseAgent instances associated with the task_id."""

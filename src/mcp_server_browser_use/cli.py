@@ -6,7 +6,7 @@ import sys
 import traceback
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import typer
 from dotenv import load_dotenv

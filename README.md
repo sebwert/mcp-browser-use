@@ -29,61 +29,49 @@ AI-driven browser automation server implementing the Model Context Protocol (MCP
 
 ### Prerequisites
 
--   Python 3.11 or higher
--   `uv` (fast Python package installer): `pip install uv`
--   Chrome/Chromium browser installed
--   Install Playwright browsers: `uv sync` and then `uv run playwright install`
+- `uv` (fast Python package installer): `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Install correct driver for playwright: `uvx --from mcp-server-browser-use@latest python -m playwright install`
 
 ### Integration with MCP Clients (e.g., Claude Desktop)
 
 You can configure clients like Claude Desktop to connect to this server. Add the following structure to the client's configuration (e.g., `claude_desktop_config.json`), adjusting the path and environment variables as needed:
 
 ```json
-// Example for Claude Desktop config
+// Example 1: The simplest way to run always the latest version of this mcp server
 "mcpServers": {
     "browser-use": {
-      // Option 1: Run installed package
       "command": "uvx",
       "args": ["mcp-server-browser-use@latest"],
-
-      // Option 2: Run from local development source
-      // "command": "uv",
-      // "args": [
-      //   "--directory",
-      //   "/path/to/mcp-server-browser-use",
-      //   "run",
-      //   "mcp-server-browser-use"
-      // ],
       "env": {
-        // --- CRITICAL: Add required API keys and paths here ---
         "MCP_LLM_GOOGLE_API_KEY": "YOUR_KEY_HERE_IF_USING_GOOGLE",
-        "MCP_RESEARCH_TOOL_SAVE_DIR": "/path/to/your/research_outputs", // MANDATORY
-        // "MCP_LLM_OPENROUTER_API_KEY": "YOUR_OPENROUTER_API_KEY",
-        // "MCP_LLM_OPENAI_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENAI",
-        // "MCP_LLM_ANTHROPIC_API_KEY": "YOUR_KEY_HERE_IF_USING_ANTHROPIC",
-        // ... add other keys based on MCP_LLM_PROVIDER ...
+        "MCP_LLM_PROVIDER": "google",
+        "MCP_LLM_MODEL_NAME": "gemini-2.5-flash-preview-04-17",
+        "MCP_BROWSER_HEADLESS": "true",
+      }
+    }
+}
 
-        "MCP_LLM_PROVIDER": "google", // Use OpenRouter as provider
-        "MCP_LLM_MODEL_NAME": "gemini-2.5-flash-preview-04-17", // Example OpenRouter model
-        "MCP_BROWSER_HEADLESS": "true",    // Run browser without UI
-
-        // --- Optional Overrides (defaults are usually fine) ---
-        // "MCP_AGENT_TOOL_HISTORY_PATH": "/path/to/agent_history", // Optional: to save agent history JSONs and GIFs
-
-        // --- Example for connecting to your own browser ---
-        // "MCP_BROWSER_USE_OWN_BROWSER": "true",
-        // "MCP_BROWSER_CDP_URL": "http://localhost:9222",
-
-        // Ensure Python uses UTF-8
-        "PYTHONIOENCODING": "utf-8",
-        "PYTHONUNBUFFERED": "1",
-        "PYTHONUTF8": "1"
+// Example 2: Run from local development source
+"mcpServers": {
+    "browser-use": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/mcp-server-browser-use",
+        "run",
+        "mcp-server-browser-use"
+      ],
+      "env": {
+        "MCP_LLM_GOOGLE_API_KEY": "YOUR_KEY_HERE_IF_USING_GOOGLE",
+        "MCP_LLM_PROVIDER": "google",
+        "MCP_LLM_MODEL_NAME": "gemini-2.5-flash-preview-04-17",
+        "MCP_BROWSER_HEADLESS": "true",
       }
     }
 }
 ```
 
-**Important:** Ensure the `command` and `args` correctly point to how you want to run the server. Set the necessary API keys and the **mandatory** `MCP_RESEARCH_TOOL_SAVE_DIR` in the `env` section.
+**Important:** Ensure the `command` and `args` correctly point to how you want to run the server. Set the necessary API keys in the `env` section.
 
 ## MCP Tools
 
@@ -98,11 +86,11 @@ This server exposes the following tools via the Model Context Protocol:
     *   **Returns:** (string) The final result extracted by the agent or an error message. Agent history (JSON, optional GIF) saved if `MCP_AGENT_TOOL_HISTORY_PATH` is set.
 
 2.  **`run_deep_research`**
-    *   **Description:** Performs in-depth web research on a topic, generates a report, and waits for completion. Uses settings from `MCP_RESEARCH_TOOL_*`, `MCP_LLM_*`, and `MCP_BROWSER_*` environment variables. All outputs are saved to a subdirectory within the **mandatory** `MCP_RESEARCH_TOOL_SAVE_DIR`.
+    *   **Description:** Performs in-depth web research on a topic, generates a report, and waits for completion. Uses settings from `MCP_RESEARCH_TOOL_*`, `MCP_LLM_*`, and `MCP_BROWSER_*` environment variables. If `MCP_RESEARCH_TOOL_SAVE_DIR` is set, outputs are saved to a subdirectory within it; otherwise, operates in memory-only mode.
     *   **Arguments:**
         *   `research_task` (string, required): The topic or question for the research.
         *   `max_parallel_browsers` (integer, optional): Overrides `MCP_RESEARCH_TOOL_MAX_PARALLEL_BROWSERS` from environment.
-    *   **Returns:** (string) The generated research report in Markdown format, including the file path, or an error message.
+    *   **Returns:** (string) The generated research report in Markdown format, including the file path (if saved), or an error message.
 
 ## CLI Usage
 
@@ -134,7 +122,7 @@ This package also provides a command-line interface `mcp-browser-cli` for direct
         mcp-browser-cli run-deep-research "What are the latest advancements in AI-driven browser automation?" --max-parallel-browsers 5 -e .env
         ```
 
-All other configurations (LLM keys, paths, browser settings) are picked up from environment variables (or the specified `.env` file) as detailed in the Configuration section. **Remember to set `MCP_RESEARCH_TOOL_SAVE_DIR`.**
+All other configurations (LLM keys, paths, browser settings) are picked up from environment variables (or the specified `.env` file) as detailed in the Configuration section.
 
 ## Configuration (Environment Variables)
 
@@ -183,7 +171,7 @@ Configure the server and CLI using environment variables. You can set these in y
 |                                     | `MCP_AGENT_TOOL_GENERATE_GIF`                  | Enable generation of agent history GIF (`true`/`false`). Requires `MCP_AGENT_TOOL_HISTORY_PATH` to be set. | `false`                           |
 | **Research Tool (MCP_RESEARCH_TOOL_)** |                                             | Settings for the `run_deep_research` tool.                                                                 |                                   |
 |                                     | `MCP_RESEARCH_TOOL_MAX_PARALLEL_BROWSERS`      | Max parallel browser instances for deep research.                                                          | `3`                               |
-|                                     | `MCP_RESEARCH_TOOL_SAVE_DIR`                   | **Mandatory**: Base directory to save research artifacts. Task ID will be appended.                        | `N/A (Required)`                  |
+|                                     | `MCP_RESEARCH_TOOL_SAVE_DIR`                   | Optional: Base directory to save research artifacts. Task ID will be appended. If not set, operates in memory-only mode. | `None`                           |
 | **Paths (MCP_PATHS_)**              |                                                | General path settings.                                                                                     |                                   |
 |                                     | `MCP_PATHS_DOWNLOADS`                          | Optional: Directory for downloaded files. If not set, persistent downloads to a specific path are disabled.  | ` ` (empty, downloads disabled)  |
 | **Server (MCP_SERVER_)**            |                                                | Server-specific settings.                                                                                  |                                   |

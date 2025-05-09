@@ -87,13 +87,7 @@ class DeepResearchToolSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_RESEARCH_TOOL_")
 
     max_parallel_browsers: int = Field(default=3, env="MAX_PARALLEL_BROWSERS")
-    save_dir: str = Field(default=..., env="SAVE_DIR") # Base dir, task_id will be appended. Mandatory.
-
-    @field_validator('save_dir')
-    def check_save_dir(cls, v: str, info: ValidationInfo) -> str:
-        if not v: # Should be caught by '...' default, but as a safeguard
-            raise ValueError(f"{info.field_name} must be set via MCP_RESEARCH_TOOL_SAVE_DIR environment variable.")
-        return v
+    save_dir: Optional[str] = Field(default=None, env="SAVE_DIR") # Base dir, task_id will be appended. Optional now.
 
 
 class PathSettings(BaseSettings):

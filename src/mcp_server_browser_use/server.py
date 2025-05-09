@@ -284,7 +284,6 @@ def serve() -> FastMCP:
                 if isinstance(settings.server.mcp_config, str):
                      mcp_server_config_for_agent = json.loads(settings.server.mcp_config)
 
-
             agent_instance = DeepResearchAgent(
                 llm=research_llm,
                 browser_config=dr_browser_cfg,
@@ -293,31 +292,34 @@ def serve() -> FastMCP:
 
             current_max_parallel_browsers = max_parallel_browsers_override if max_parallel_browsers_override is not None else settings.research_tool.max_parallel_browsers
 
-            # Construct the full save directory path for this specific task
-            save_dir_for_this_task = str(Path(settings.research_tool.save_dir) / task_id)
-            # DeepResearchAgent.run expects this `save_dir` to be the task-specific one.
+            # Check if save_dir is provided, otherwise use in-memory approach
+            save_dir_for_this_task = None
+            if settings.research_tool.save_dir:
+                # If save_dir is provided, construct the full save directory path for this specific task
+                save_dir_for_this_task = str(Path(settings.research_tool.save_dir) / task_id)
+                logger.info(f"Deep research save directory for this task: {save_dir_for_this_task}")
+            else:
+                logger.info("No save_dir configured. Deep research will operate in memory-only mode.")
 
-            logger.info(f"Deep research save directory for this task: {save_dir_for_this_task}")
             logger.info(f"Using max_parallel_browsers: {current_max_parallel_browsers}")
-
 
             result_dict = await agent_instance.run(
                 topic=research_task,
-                save_dir=save_dir_for_this_task, # Pass full task-specific path
+                save_dir=save_dir_for_this_task, # Can be None now
                 task_id=task_id, # Pass the generated task_id
                 max_parallel_browsers=current_max_parallel_browsers
             )
 
-            report_file_path = result_dict.get("report_file_path") # This is the full path from the agent
-            if report_file_path and Path(report_file_path).exists():
-                with open(report_file_path, "r", encoding="utf-8") as f:
+            # Handle the result based on if files were saved or not
+            if save_dir_for_this_task and result_dict.get("report_file_path") and Path(result_dict["report_file_path"]).exists():
+                with open(result_dict["report_file_path"], "r", encoding="utf-8") as f:
                     markdown_content = f.read()
-                report_content = f"Deep research report generated successfully at {report_file_path}\n\n{markdown_content}"
-                logger.info(f"Deep research task {task_id} completed. Report at {report_file_path}")
+                report_content = f"Deep research report generated successfully at {result_dict['report_file_path']}\n\n{markdown_content}"
+                logger.info(f"Deep research task {task_id} completed. Report at {result_dict['report_file_path']}")
             elif result_dict.get("status") == "completed" and result_dict.get("final_report"):
                 report_content = f"Deep research completed. Report content:\n\n{result_dict['final_report']}"
-                if report_file_path:
-                     report_content += f"\n(Expected report file at: {report_file_path})"
+                if result_dict.get("report_file_path"):
+                     report_content += f"\n(Expected report file at: {result_dict['report_file_path']})"
                 logger.info(f"Deep research task {task_id} completed. Report content retrieved directly.")
             else:
                 report_content = f"Deep research task {task_id} result: {result_dict}. Report file not found or content not available."
@@ -337,12 +339,14 @@ server_instance = serve() # Renamed from 'server' to avoid conflict with 'settin
 def main():
     logger.info("Starting MCP server for browser-use...")
     try:
-        # Accessing a mandatory field early to ensure it's set
-        _ = settings.research_tool.save_dir
-        logger.info(f"Research tool save directory configured: {settings.research_tool.save_dir}")
+        # Just log the Research tool save directory if it's configured
+        if settings.research_tool.save_dir:
+            logger.info(f"Research tool save directory configured: {settings.research_tool.save_dir}")
+        else:
+            logger.info("Research tool save directory not configured. Deep research will operate in memory-only mode.")
     except Exception as e:
-        logger.error(f"Configuration error: {e}. Please ensure all mandatory environment variables like MCP_RESEARCH_TOOL_SAVE_DIR are set.")
-        return # Exit if mandatory config is missing
+        logger.error(f"Configuration error: {e}")
+        return # Exit if there's a configuration error
 
     logger.info(f"Loaded settings with LLM provider: {settings.llm.provider}, Model: {settings.llm.model_name}")
     logger.info(f"Browser keep_open: {settings.browser.keep_open}, Use own browser: {settings.browser.use_own_browser}")
