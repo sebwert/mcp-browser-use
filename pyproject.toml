@@ -17,7 +17,7 @@ dependencies = [
   "pydantic-settings>=2.0.0",
   "mcp>=1.6.0",
   "typer[all]>=0.12.0",
-  "browser-use==0.1.45",
+  "browser-use==0.1.41",
   "pyperclip==1.9.0",
   "json-repair",
   "langchain-mistralai==0.2.4",

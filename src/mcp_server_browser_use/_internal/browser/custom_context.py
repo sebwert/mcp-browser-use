@@ -4,8 +4,8 @@ import os
 
 from browser_use.browser.browser import Browser, IN_DOCKER
 from browser_use.browser.context import BrowserContext, BrowserContextConfig
-from patchright.async_api import Browser as PlaywrightBrowser
-from patchright.async_api import BrowserContext as PlaywrightBrowserContext
+from playwright.async_api import Browser as PlaywrightBrowser
+from playwright.async_api import BrowserContext as PlaywrightBrowserContext
 from typing import Optional
 from browser_use.browser.context import BrowserContextState
 
@@ -42,10 +42,7 @@ class CustomBrowserContext(BrowserContext):
                 bypass_csp=self.config.disable_security,
                 ignore_https_errors=self.config.disable_security,
                 record_video_dir=self.config.save_recording_path,
-                record_video_size={
-                    "width": self.config.window_width,
-                    "height": self.config.window_height
-                },
+                record_video_size=self.config.browser_window_size.model_dump(),
                 record_har_path=self.config.save_har_path,
                 locale=self.config.locale,
                 http_credentials=self.config.http_credentials,

@@ -31,7 +31,7 @@ AI-driven browser automation server implementing the Model Context Protocol (MCP
 -   Python 3.11 or higher
 -   `uv` (fast Python package installer): `pip install uv`
 -   Chrome/Chromium browser installed
--   Install Playwright browsers: `uv sync` and then `uv run patchright install chromium --with-deps --no-shell`
+-   Install Playwright browsers: `uv sync` and then `uv run playwright install`
 
 ### Integration with MCP Clients (e.g., Claude Desktop)
 
@@ -225,7 +225,7 @@ Instead of having the server launch and manage its own browser instance, you can
 uv sync --dev
 
 # Install playwright browsers
-uv run patchright install chromium --with-deps --no-shell
+uv run playwright install
 # Run MCP server with debugger (Example connecting to own browser via CDP)
 # 1. Launch Chrome: google-chrome --remote-debugging-port=9222
 # 2. Run inspector command with environment variables:
@@ -252,7 +252,7 @@ uv run mcp-browser-cli run-browser-agent "What is the title of example.com?"
     *   Check firewalls and ensure the browser is running.
 -   **API Errors**: Double-check API keys (`MCP_LLM_<PROVIDER>_API_KEY` or `MCP_LLM_API_KEY`) and endpoints (e.g., `MCP_LLM_AZURE_OPENAI_ENDPOINT` for Azure).
 -   **Vision Issues**: Ensure `MCP_AGENT_TOOL_USE_VISION=true` and your LLM supports vision.
--   **Dependency Problems**: Run `uv sync` and `uv run patchright install chromium --with-deps --no-shell`.
+-   **Dependency Problems**: Run `uv sync` and `uv run playwright install`.
 -   **Logging**: Check the log file (`MCP_SERVER_LOG_FILE`) or console output. Increase `MCP_SERVER_LOGGING_LEVEL` to `DEBUG` for more details. For CLI, use `--log-level DEBUG`.
 
 ## License
