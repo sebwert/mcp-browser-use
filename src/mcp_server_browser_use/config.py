@@ -7,8 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_LLM_")
 
-    provider: str = Field(default="openai", env="PROVIDER")
-    model_name: str = Field(default="gpt-4.1", env="MODEL_NAME")
+    provider: str = Field(default="google", env="PROVIDER")
+    model_name: str = Field(default="gemini-2.5-flash-preview-04-17", env="MODEL_NAME")
     temperature: float = Field(default=0.0, env="TEMPERATURE")
     base_url: Optional[str] = Field(default=None, env="BASE_URL")
     api_key: Optional[SecretStr] = Field(default=None, env="API_KEY") # Generic API key

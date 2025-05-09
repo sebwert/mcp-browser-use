@@ -56,18 +56,19 @@ You can configure clients like Claude Desktop to connect to this server. Add the
       // ],
       "env": {
         // --- CRITICAL: Add required API keys and paths here ---
-        "MCP_LLM_OPENROUTER_API_KEY": "YOUR_OPENROUTER_API_KEY",
+        "MCP_LLM_GOOGLE_API_KEY": "YOUR_KEY_HERE_IF_USING_GOOGLE",
         "MCP_RESEARCH_TOOL_SAVE_DIR": "/path/to/your/research_outputs", // MANDATORY
+        // "MCP_LLM_OPENROUTER_API_KEY": "YOUR_OPENROUTER_API_KEY",
         // "MCP_LLM_OPENAI_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENAI",
         // "MCP_LLM_ANTHROPIC_API_KEY": "YOUR_KEY_HERE_IF_USING_ANTHROPIC",
         // ... add other keys based on MCP_LLM_PROVIDER ...
 
+        "MCP_LLM_PROVIDER": "google", // Use OpenRouter as provider
+        "MCP_LLM_MODEL_NAME": "gemini-2.5-flash-preview-04-17", // Example OpenRouter model
+        "MCP_BROWSER_HEADLESS": "true",    // Run browser without UI
+
         // --- Optional Overrides (defaults are usually fine) ---
-        "MCP_LLM_PROVIDER": "openrouter", // Use OpenRouter as provider
-        "MCP_LLM_MODEL_NAME": "google/gemini-1.5-pro", // Example OpenRouter model
-        "MCP_BROWSER_HEADLESS": "true",    // Default: run browser without UI
         // "MCP_AGENT_TOOL_HISTORY_PATH": "/path/to/agent_history", // Optional: to save agent history JSONs and GIFs
-        // "MCP_AGENT_TOOL_GENERATE_GIF": "true", // Optional: to generate GIFs if history path is set
 
         // --- Example for connecting to your own browser ---
         // "MCP_BROWSER_USE_OWN_BROWSER": "true",
@@ -228,17 +229,19 @@ uv sync --dev
 
 # Install playwright browsers
 uv run playwright install
+
 # Run MCP server with debugger (Example connecting to own browser via CDP)
-# 1. Launch Chrome: google-chrome --remote-debugging-port=9222
+# 1. Launch Chrome: google-chrome --remote-debugging-port=9222 --user-data-dir="optional/path/to/user/profile"
 # 2. Run inspector command with environment variables:
 npx @modelcontextprotocol/inspector@latest \
-  -e MCP_LLM_OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
-  -e MCP_LLM_PROVIDER=openrouter \
-  -e MCP_LLM_MODEL_NAME=openai/gpt-4.1 \
+  -e MCP_LLM_GOOGLE_API_KEY=$GOOGLE_API_KEY \
+  -e MCP_LLM_PROVIDER=google \
+  -e MCP_LLM_MODEL_NAME=gemini-2.5-flash-preview-04-17 \
   -e MCP_BROWSER_USE_OWN_BROWSER=true \
   -e MCP_BROWSER_CDP_URL=http://localhost:9222 \
   -e MCP_RESEARCH_TOOL_SAVE_DIR=./tmp/dev_research_output \
   uv --directory . run mcp-server-browser-use
+
 # Note: Change timeout in inspector's config panel if needed (default is 10 seconds)
 
 # Run CLI example
