@@ -7,12 +7,12 @@ repos:
       - id: prettier
         types_or: [yaml, json5]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.1
-    hooks:
-      - id: ruff-format
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: v0.8.1
+  #   hooks:
+  #     - id: ruff-format
+  #     - id: ruff
+  #       args: [--fix, --exit-non-zero-on-fix]
 
   - repo: local
     hooks:

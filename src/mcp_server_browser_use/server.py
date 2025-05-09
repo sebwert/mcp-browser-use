@@ -1,140 +1,330 @@
+import asyncio
+import json
 import logging
 import os
 import traceback
-from typing import Optional
+import uuid
+from typing import Any, Dict, Optional
 
-from mcp.server.fastmcp import Context, FastMCP
+from .config import settings # Import global AppSettings instance
 
-log_file = os.getenv("LOG_FILE", "mcp_server_browser_use.log")
+# Configure logging using settings
+log_level_str = settings.server.logging_level.upper()
+numeric_level = getattr(logging, log_level_str, logging.INFO)
+
+# Remove any existing handlers from the root logger to avoid duplicate messages
+# if basicConfig was called elsewhere or by a library.
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=numeric_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename=log_file,
-    filemode="a",
+    filename=settings.server.log_file if settings.server.log_file else None,
+    filemode="a" if settings.server.log_file else None, # only use filemode if filename is set
+    force=True # Override any previous basicConfig
 )
-logging.getLogger().addHandler(logging.NullHandler())
-logging.getLogger().propagate = False
-
 
 logger = logging.getLogger("mcp_server_browser_use")
+# Prevent log propagation if other loggers are configured higher up
+# logging.getLogger().propagate = False # This might be too aggressive, let's rely on basicConfig force
+
+from browser_use.browser.browser import BrowserConfig
+from mcp.server.fastmcp import Context, FastMCP
+
+# Import from _internal
+from ._internal.agent.browser_use.browser_use_agent import BrowserUseAgent
+from ._internal.agent.deep_research.deep_research_agent import DeepResearchAgent
+from ._internal.browser.custom_browser import CustomBrowser
+from ._internal.browser.custom_context import (
+    CustomBrowserContext,
+    CustomBrowserContextConfig,
+)
+from ._internal.controller.custom_controller import CustomController
+from ._internal.utils import llm_provider as internal_llm_provider # aliased
+
+from browser_use.agent.views import (
+    AgentHistoryList,
+)
+
+# Shared resources for MCP_BROWSER_KEEP_OPEN
+shared_browser_instance: Optional[CustomBrowser] = None
+shared_context_instance: Optional[CustomBrowserContext] = None
+shared_controller_instance: Optional[CustomController] = None # Controller might also be shared
+resource_lock = asyncio.Lock()
 
 
-def get_env_bool(key: str, default: bool = False) -> bool:
-    """Get boolean value from environment variable."""
-    return os.getenv(key, str(default)).lower() in ("true", "1", "yes")
+async def get_controller(ask_human_callback: Optional[Any] = None) -> CustomController:
+    """Gets or creates a shared controller instance if keep_open is true, or a new one."""
+    global shared_controller_instance
+    if settings.browser.keep_open and shared_controller_instance:
+        # Potentially update callback if it can change per call, though usually fixed for server
+        return shared_controller_instance
+
+    controller = CustomController(ask_assistant_callback=ask_human_callback)
+    if settings.server.mcp_config:
+        try:
+            mcp_dict_config = settings.server.mcp_config
+            if isinstance(settings.server.mcp_config, str): # if passed as JSON string
+                mcp_dict_config = json.loads(settings.server.mcp_config)
+            await controller.setup_mcp_client(mcp_dict_config)
+        except Exception as e:
+            logger.error(f"Failed to setup MCP client for controller: {e}")
+
+    if settings.browser.keep_open:
+        shared_controller_instance = controller
+    return controller
+
+
+async def get_browser_and_context() -> tuple[CustomBrowser, CustomBrowserContext]:
+    """
+    Manages creation/reuse of CustomBrowser and CustomBrowserContext
+    based on settings.browser.keep_open and settings.browser.use_own_browser.
+    """
+    global shared_browser_instance, shared_context_instance
+
+    current_browser: Optional[CustomBrowser] = None
+    current_context: Optional[CustomBrowserContext] = None
+
+    agent_headless_override = settings.agent_tool.headless
+    browser_headless = agent_headless_override if agent_headless_override is not None else settings.browser.headless
+
+    agent_disable_security_override = settings.agent_tool.disable_security
+    browser_disable_security = agent_disable_security_override if agent_disable_security_override is not None else settings.browser.disable_security
+
+    if settings.browser.use_own_browser and settings.browser.cdp_url:
+        logger.info(f"Connecting to own browser via CDP: {settings.browser.cdp_url}")
+        browser_cfg = BrowserConfig(
+            cdp_url=settings.browser.cdp_url,
+            wss_url=settings.browser.wss_url,
+            user_data_dir=settings.browser.user_data_dir, # Useful for CDP
+            # Headless, binary_path etc. are controlled by the user-launched browser
+        )
+        current_browser = CustomBrowser(config=browser_cfg)
+        # For CDP, context config is minimal, trace/recording might not apply or be harder to manage
+        context_cfg = CustomBrowserContextConfig(
+            trace_path=settings.browser.trace_path,
+            save_downloads_path=settings.paths.downloads,
+            # Recording path for CDP might be complex, deferring for now
+        )
+        current_context = await current_browser.new_context(config=context_cfg)
+
+    elif settings.browser.keep_open:
+        if shared_browser_instance and shared_context_instance:
+            logger.info("Reusing shared browser and context.")
+            # Ensure browser is still connected
+            if not shared_browser_instance.is_connected():
+                logger.warning("Shared browser was disconnected. Recreating.")
+                await shared_browser_instance.close()
+                if shared_context_instance: await shared_context_instance.close() # Close old context too
+                shared_browser_instance = None
+                shared_context_instance = None
+            else:
+                current_browser = shared_browser_instance
+                # For shared browser, we might want a new context or reuse.
+                # For simplicity, let's reuse the context if keep_open is true.
+                # If new context per call is needed, this logic would change.
+                current_context = shared_context_instance
+
+        if not current_browser or not current_context : # If shared instances were not valid or not yet created
+            logger.info("Creating new shared browser and context.")
+            browser_cfg = BrowserConfig(
+                headless=browser_headless,
+                disable_security=browser_disable_security,
+                browser_binary_path=settings.browser.binary_path,
+                user_data_dir=settings.browser.user_data_dir,
+                window_width=settings.browser.window_width,
+                window_height=settings.browser.window_height,
+            )
+            shared_browser_instance = CustomBrowser(config=browser_cfg)
+            context_cfg = CustomBrowserContextConfig(
+                trace_path=settings.browser.trace_path,
+                save_downloads_path=settings.paths.downloads,
+                save_recording_path=settings.agent_tool.save_recording_path if settings.agent_tool.enable_recording else None,
+                force_new_context=False # Important for shared context
+            )
+            shared_context_instance = await shared_browser_instance.new_context(config=context_cfg)
+            current_browser = shared_browser_instance
+            current_context = shared_context_instance
+    else: # Create new resources per call (not using own browser, not keeping open)
+        logger.info("Creating new browser and context for this call.")
+        browser_cfg = BrowserConfig(
+            headless=browser_headless,
+            disable_security=browser_disable_security,
+            browser_binary_path=settings.browser.binary_path,
+            user_data_dir=settings.browser.user_data_dir,
+            window_width=settings.browser.window_width,
+            window_height=settings.browser.window_height,
+        )
+        current_browser = CustomBrowser(config=browser_cfg)
+        context_cfg = CustomBrowserContextConfig(
+            trace_path=settings.browser.trace_path,
+            save_downloads_path=settings.paths.downloads,
+            save_recording_path=settings.agent_tool.save_recording_path if settings.agent_tool.enable_recording else None,
+            force_new_context=True
+        )
+        current_context = await current_browser.new_context(config=context_cfg)
+
+    if not current_browser or not current_context:
+        raise RuntimeError("Failed to initialize browser or context")
+
+    return current_browser, current_context
 
 
 def serve() -> FastMCP:
-    from mcp_server_browser_use.run_agents import (
-        run_browser_agent as _run_browser_agent,
-    )
-    from mcp_server_browser_use.run_agents import run_deep_search as _run_deep_search
-    from mcp_server_browser_use.utils import utils
-
     server = FastMCP("mcp_server_browser_use")
 
     @server.tool()
-    async def run_browser_agent(ctx: Context, task: str, add_infos: str = "") -> str:
-        """Runs a browser agent task synchronously and waits for the result."""
+    async def run_browser_agent(ctx: Context, task: str) -> str:
+        logger.info(f"Received run_browser_agent task: {task[:100]}...")
+        final_result = "Error: Agent execution failed."
+
+        browser_instance: Optional[CustomBrowser] = None
+        context_instance: Optional[CustomBrowserContext] = None
+        controller_instance: Optional[CustomController] = None
 
         try:
-            (
-                final_result,
-                errors,
-                model_actions,
-                model_thoughts,
-                gif_path,
-                trace_file,
-                history_file,
-            ) = await _run_browser_agent(
-                agent_type=os.getenv("MCP_AGENT_TYPE", "org"),
-                llm_provider=os.getenv("MCP_MODEL_PROVIDER", "anthropic"),
-                llm_model_name=os.getenv("MCP_MODEL_NAME", "claude-3-7-sonnet-20250219"),
-                llm_num_ctx=16000,
-                llm_temperature=float(os.getenv("MCP_TEMPERATURE", "0")),
-                llm_base_url=os.getenv("MCP_BASE_URL"),
-                llm_api_key=os.getenv("MCP_API_KEY"),
-                use_own_browser=get_env_bool("MCP_USE_OWN_BROWSER", False),
-                keep_browser_open=get_env_bool("MCP_KEEP_BROWSER_OPEN", False),
-                headless=get_env_bool("MCP_HEADLESS", True),
-                disable_security=get_env_bool("MCP_DISABLE_SECURITY", True),
-                window_w=int(os.getenv("BROWSER_WINDOW_WIDTH", "1280")),
-                window_h=int(os.getenv("BROWSER_WINDOW_HEIGHT", "720")),
-                save_recording_path=os.getenv("MCP_SAVE_RECORDING_PATH"),
-                save_agent_history_path=os.getenv("MCP_AGENT_HISTORY_PATH", "./tmp/agent_history"),
-                save_trace_path=os.getenv("BROWSER_TRACE_PATH", "./tmp/trace"),
-                enable_recording=get_env_bool("MCP_ENABLE_RECORDING", False),
+            async with resource_lock: # Protect shared resource access/creation
+                browser_instance, context_instance = await get_browser_and_context()
+                # For server, ask_human_callback is likely not interactive, can be None or a placeholder
+                controller_instance = await get_controller(ask_human_callback=None)
+
+            if not browser_instance or not context_instance or not controller_instance:
+                 raise RuntimeError("Failed to acquire browser resources or controller.")
+
+            main_llm_config = settings.get_llm_config()
+            main_llm = internal_llm_provider.get_llm_model(**main_llm_config)
+
+            planner_llm = None
+            if settings.llm.planner_provider and settings.llm.planner_model_name:
+                planner_llm_config = settings.get_llm_config(is_planner=True)
+                planner_llm = internal_llm_provider.get_llm_model(**planner_llm_config)
+
+            task_history_dir = os.path.join(settings.agent_tool.history_path, agent_task_id)
+            os.makedirs(task_history_dir, exist_ok=True)
+            agent_history_json_file = os.path.join(task_history_dir, f"{agent_task_id}.json")
+
+            agent_instance = BrowserUseAgent(
                 task=task,
-                add_infos=add_infos,
-                max_steps=int(os.getenv("MCP_MAX_STEPS", "100")),
-                use_vision=get_env_bool("MCP_USE_VISION", True),
-                max_actions_per_step=int(os.getenv("MCP_MAX_ACTIONS_PER_STEP", "5")),
-                tool_calling_method=os.getenv("MCP_TOOL_CALLING_METHOD", "auto"),
-                chrome_cdp=os.getenv("CHROME_CDP"),
-                max_input_tokens=int(os.getenv("MCP_MAX_INPUT_TOKENS", "128000")),
+                llm=main_llm,
+                browser=browser_instance,
+                browser_context=context_instance,
+                controller=controller_instance,
+                planner_llm=planner_llm,
+                max_actions_per_step=settings.agent_tool.max_actions_per_step,
+                use_vision=settings.agent_tool.use_vision,
+                # Callbacks can be added here if server needs to react to steps
             )
 
-            if any(error is not None for error in errors):
-                logger.error(f"Synchronous browser task '{task}' failed: {errors}")
-                return f"Task failed: {errors}\n\nResult: {final_result}"
-            else:
-                logger.info(f"Synchronous browser task '{task}' completed.")
-                return final_result
+            history: AgentHistoryList = await agent_instance.run(max_steps=settings.agent_tool.max_steps)
+            agent_instance.save_history(agent_history_json_file)
 
-        except utils.MissingAPIKeyError as e:
-            logger.error(f"Cannot run browser agent task '{task}': {e}")
-            return f"Configuration Error: {str(e)}"
+            final_result = history.final_result() or "Agent finished without a final result."
+            logger.info(f"Agent task completed. Result: {final_result[:100]}...")
+
         except Exception as e:
-            logger.error(f"Error running sync browser agent task '{task}': {e}\n{traceback.format_exc()}")
-            return f"Error during task execution: {str(e)}"
+            logger.error(f"Error in run_browser_agent: {e}\n{traceback.format_exc()}")
+            final_result = f"Error: {e}"
+        finally:
+            if not settings.browser.keep_open and not settings.browser.use_own_browser:
+                logger.info("Closing browser resources for this call.")
+                if context_instance:
+                    await context_instance.close()
+                if browser_instance:
+                    await browser_instance.close()
+                if controller_instance: # Close controller only if not shared
+                    await controller_instance.close_mcp_client()
+            elif settings.browser.use_own_browser: # Own browser, only close controller if not shared
+                 if controller_instance and not (settings.browser.keep_open and controller_instance == shared_controller_instance):
+                    await controller_instance.close_mcp_client()
+        return final_result
 
     @server.tool()
-    async def run_deep_search(
+    async def run_deep_research(
         ctx: Context,
         research_task: str,
-        max_search_iterations: Optional[int] = 10,
-        max_query_per_iteration: Optional[int] = 3,
+        max_parallel_browsers_override: Optional[int] = None,
     ) -> str:
-        """Performs deep search synchronously and waits for the report."""
+        logger.info(f"Received run_deep_research task: {research_task[:100]}...")
+        task_id = str(uuid.uuid4())
+        report_content = "Error: Deep research failed."
 
         try:
-            (
-                markdown_content,
-                file_path,
-            ) = _run_deep_search(
-                research_task=research_task,
-                max_search_iterations=max_search_iterations,
-                max_query_per_iteration=max_query_per_iteration,
-                llm_provider=os.getenv("MCP_MODEL_PROVIDER", "anthropic"),
-                llm_model_name=os.getenv("MCP_MODEL_NAME", "claude-3-7-sonnet-20250219"),
-                llm_num_ctx=16000,
-                llm_temperature=float(os.getenv("MCP_TEMPERATURE", "0")),
-                llm_base_url=os.getenv("MCP_BASE_URL"),
-                llm_api_key=os.getenv("MCP_API_KEY"),
-                use_vision=get_env_bool("MCP_USE_VISION", True),
-                use_own_browser=get_env_bool("MCP_USE_OWN_BROWSER", False),
-                headless=get_env_bool("BROWSER_HEADLESS", True),
-                chrome_cdp=os.getenv("CHROME_CDP"),
+            main_llm_config = settings.get_llm_config() # Deep research uses main LLM config
+            research_llm = internal_llm_provider.get_llm_model(**main_llm_config)
+
+            # Prepare browser_config dict for DeepResearchAgent's sub-agents
+            dr_browser_cfg = {
+                "headless": settings.browser.headless, # Use general browser headless for sub-tasks
+                "disable_security": settings.browser.disable_security,
+                "browser_binary_path": settings.browser.binary_path,
+                "user_data_dir": settings.browser.user_data_dir,
+                "window_width": settings.browser.window_width,
+                "window_height": settings.browser.window_height,
+                "trace_path": settings.browser.trace_path, # For sub-agent traces
+                "save_downloads_path": settings.paths.downloads, # For sub-agent downloads
+            }
+            if settings.browser.use_own_browser and settings.browser.cdp_url:
+                # If main browser is CDP, sub-agents should also use it
+                dr_browser_cfg["cdp_url"] = settings.browser.cdp_url
+                dr_browser_cfg["wss_url"] = settings.browser.wss_url
+
+            mcp_server_config_for_agent = None
+            if settings.server.mcp_config:
+                mcp_server_config_for_agent = settings.server.mcp_config
+                if isinstance(settings.server.mcp_config, str):
+                     mcp_server_config_for_agent = json.loads(settings.server.mcp_config)
+
+
+            agent_instance = DeepResearchAgent(
+                llm=research_llm,
+                browser_config=dr_browser_cfg,
+                mcp_server_config=mcp_server_config_for_agent,
             )
 
-            return f"Deep research report generated successfully at {file_path}\n\n{markdown_content}"
+            current_max_parallel_browsers = max_parallel_browsers_override if max_parallel_browsers_override is not None else settings.research_tool.max_parallel_browsers
 
-        except utils.MissingAPIKeyError as e:
-            logger.error(f"Cannot run deep research task '{research_task}': {e}")
-            return f"Configuration Error: {str(e)}"
+            save_dir_for_task = os.path.join(settings.research_tool.save_dir, task_id)
+            os.makedirs(save_dir_for_task, exist_ok=True)
+
+            logger.info(f"Deep research save directory: {save_dir_for_task}")
+            logger.info(f"Using max_parallel_browsers: {current_max_parallel_browsers}")
+
+
+            result_dict = await agent_instance.run(
+                topic=research_task,
+                task_id=task_id, # Pass the generated task_id
+                save_dir=save_dir_for_task,
+                max_parallel_browsers=current_max_parallel_browsers
+            )
+
+            report_file_path = result_dict.get("report_file_path")
+            if report_file_path and os.path.exists(report_file_path):
+                with open(report_file_path, "r", encoding="utf-8") as f:
+                    markdown_content = f.read()
+                report_content = f"Deep research report generated successfully at {report_file_path}\n\n{markdown_content}"
+                logger.info(f"Deep research task {task_id} completed. Report at {report_file_path}")
+            else:
+                report_content = f"Deep research completed, but report file not found. Result: {result_dict}"
+                logger.warning(f"Deep research task {task_id} result: {result_dict}, report file path missing or invalid.")
+
         except Exception as e:
-            logger.error(f"Error running sync deep research task '{research_task}': {e}\n{traceback.format_exc()}")
-            return f"Error during deep research execution: {str(e)}"
+            logger.error(f"Error in run_deep_research: {e}\n{traceback.format_exc()}")
+            report_content = f"Error: {e}"
+
+        return report_content
 
     return server
 
-
-server = serve()
-
+server_instance = serve() # Renamed from 'server' to avoid conflict with 'settings.server'
 
 def main():
-    server.run()
-
+    logger.info("Starting MCP server for browser-use...")
+    logger.info(f"Loaded settings with LLM provider: {settings.llm.provider}, Model: {settings.llm.model_name}")
+    logger.info(f"Browser keep_open: {settings.browser.keep_open}, Use own browser: {settings.browser.use_own_browser}")
+    if settings.browser.use_own_browser:
+        logger.info(f"Connecting to own browser via CDP: {settings.browser.cdp_url}")
+    server_instance.run()
 
 if __name__ == "__main__":
     main()

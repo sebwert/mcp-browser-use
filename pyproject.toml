@@ -14,22 +14,18 @@ classifiers = [
 ]
 
 dependencies = [
-  "langchain>=0.3.14",
-  "langchain-openai>=0.2.14",
-  "pydantic>=2.10.5",
-  "openai>=1.59.5",
-  "pyperclip>=1.9.0",
-  "langchain-ollama>=0.2.2",
-  "instructor>=1.7.2",
-  "json-repair>=0.35.0",
-  "langchain-mistralai>=0.2.6",
+  "pydantic-settings>=2.0.0",
   "mcp>=1.6.0",
-  "browser-use==0.1.40",
+  "typer[all]>=0.12.0",
+  "browser-use==0.1.45",
+  "pyperclip==1.9.0",
+  "json-repair",
+  "langchain-mistralai==0.2.4",
   "MainContentExtractor==0.0.4",
-  "langchain-google-genai>=2.0.8",
-  "langchain-anthropic>=0.2.1",
-  "langchain-mistralai>=0.2.4",
-  "pillow>=11.1.0",
+  "langchain-ibm==0.3.10",
+  "langchain_mcp_adapters==0.0.9",
+  "langgraph==0.3.34",
+  "langchain-community",
 ]
 
 [build-system]
@@ -41,6 +37,7 @@ packages = ["src/mcp_server_browser_use"]
 
 [project.scripts]
 mcp-server-browser-use = "mcp_server_browser_use.server:main"
+mcp-browser-cli = "mcp_server_browser_use.cli:app"
 
 [tool.pyright]
 include = ["src/mcp_server_browser_use"]
