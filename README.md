@@ -1,4 +1,4 @@
-<img src="./assets/web-ui.png" alt="Browser Use Web UI" width="full"/>
+<img src="./assets/header.png" alt="Browser Use Web UI" width="full"/>
 
 <br/>
 
@@ -23,21 +23,23 @@ AI-driven browser automation server implementing the Model Context Protocol (MCP
 -   ⚙️ **Environment Variable Configuration** - Fully configurable via environment variables using a structured Pydantic model.
 -   🔗 **CDP Connection** - Ability to connect to and control a user-launched Chrome/Chromium instance via Chrome DevTools Protocol.
 -   ⌨️ **CLI Interface** - Access core agent functionalities (`run_browser_agent`, `run_deep_research`) directly from the command line for testing and scripting.
--   🖼️ **Conditional GIF Generation** - Optionally generate GIFs of agent browser interactions, saved to the history path.
 
 ## Quick Start
 
-### Prerequisites
+### The Essentials
 
-- `uv` (fast Python package installer): `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- Install correct driver for playwright: `uvx --from mcp-server-browser-use@latest python -m playwright install`
+1. Install UV - the rocket-powered Python installer:
+`curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-### Integration with MCP Clients (e.g., Claude Desktop)
+2. Get Playwright browsers (required for automation):
+`uvx --from mcp-server-browser-use@latest python -m playwright install`
 
-You can configure clients like Claude Desktop to connect to this server. Add the following structure to the client's configuration (e.g., `claude_desktop_config.json`), adjusting the path and environment variables as needed:
+### Integration Patterns
+
+For MCP clients like Claude Desktop, add a server configuration that's as simple as:
 
 ```json
-// Example 1: The simplest way to run always the latest version of this mcp server
+// Example 1: One-Line Latest Version (Always Fresh)
 "mcpServers": {
     "browser-use": {
       "command": "uvx",
@@ -50,28 +52,93 @@ You can configure clients like Claude Desktop to connect to this server. Add the
       }
     }
 }
+```
 
-// Example 2: Run from local development source
+```json
+// Example 2: Advanced Configuration with CDP
+"mcpServers": {
+    "browser-use": {
+      "command": "uvx",
+      "args": ["mcp-server-browser-use@latest"],
+      "env": {
+        "MCP_LLM_OPENROUTER_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENROUTER",
+        "MCP_LLM_PROVIDER": "openrouter",
+        "MCP_LLM_MODEL_NAME": "anthropic/claude-3.5-haiku",
+        "MCP_LLM_TEMPERATURE": "0.4",
+
+        "MCP_BROWSER_HEADLESS": "false",
+        "MCP_BROWSER_WINDOW_WIDTH": "1440",
+        "MCP_BROWSER_WINDOW_HEIGHT": "1080",
+        "MCP_AGENT_TOOL_USE_VISION": "true",
+
+        "MCP_RESEARCH_TOOL_SAVE_DIR": "/path/to/your/research",
+        "MCP_RESEARCH_TOOL_MAX_PARALLEL_BROWSERS": "5",
+
+        "MCP_PATHS_DOWNLOADS": "/path/to/your/downloads",
+
+        "MCP_BROWSER_USE_OWN_BROWSER": "true",
+        "MCP_BROWSER_CDP_URL": "http://localhost:9222",
+
+        "MCP_AGENT_TOOL_HISTORY_PATH": "/path/to/your/history",
+
+        "MCP_SERVER_LOGGING_LEVEL": "DEBUG",
+        "MCP_SERVER_LOG_FILE": "/path/to/your/log/mcp_server_browser_use.log",
+      }
+    }
+}
+```
+
+```json
+// Example 3: Advanced Configuration with User Data and custom chrome path
+"mcpServers": {
+    "browser-use": {
+      "command": "uvx",
+      "args": ["mcp-server-browser-use@latest"],
+      "env": {
+        "MCP_LLM_OPENAI_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENAI",
+        "MCP_LLM_PROVIDER": "openai",
+        "MCP_LLM_MODEL_NAME": "gpt-4.1-mini",
+        "MCP_LLM_TEMPERATURE": "0.2",
+
+        "MCP_BROWSER_HEADLESS": "false",
+
+        "MCP_BROWSER_BINARY_PATH": "/path/to/your/chrome/binary",
+        "MCP_BROWSER_USER_DATA_DIR": "/path/to/your/user/data",
+        "MCP_BROWSER_DISABLE_SECURITY": "true",
+        "MCP_BROWSER_KEEP_OPEN": "true",
+        "MCP_BROWSER_TRACE_PATH": "/path/to/your/trace",
+
+        "MCP_AGENT_TOOL_HISTORY_PATH": "/path/to/your/history",
+
+        "MCP_SERVER_LOGGING_LEVEL": "DEBUG",
+        "MCP_SERVER_LOG_FILE": "/path/to/your/log/mcp_server_browser_use.log",
+      }
+    }
+}
+```
+
+```json
+// Example 4: Local Development Flow
 "mcpServers": {
     "browser-use": {
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/mcp-server-browser-use",
+        "/your/dev/path",
         "run",
         "mcp-server-browser-use"
       ],
       "env": {
-        "MCP_LLM_GOOGLE_API_KEY": "YOUR_KEY_HERE_IF_USING_GOOGLE",
-        "MCP_LLM_PROVIDER": "google",
-        "MCP_LLM_MODEL_NAME": "gemini-2.5-flash-preview-04-17",
+        "MCP_LLM_OPENROUTER_API_KEY": "YOUR_KEY_HERE_IF_USING_OPENROUTER",
+        "MCP_LLM_PROVIDER": "openrouter",
+        "MCP_LLM_MODEL_NAME": "openai/gpt-4o-mini",
         "MCP_BROWSER_HEADLESS": "true",
       }
     }
 }
 ```
 
-**Important:** Ensure the `command` and `args` correctly point to how you want to run the server. Set the necessary API keys in the `env` section.
+**Key Insight:** The best configurations emerge from starting simple (Example 1). The .env.example file contains all possible dials.
 
 ## MCP Tools
 
@@ -168,7 +235,6 @@ Configure the server and CLI using environment variables. You can set these in y
 |                                     | `MCP_AGENT_TOOL_ENABLE_RECORDING`              | Enable Playwright video recording.                                                                         | `false`                           |
 |                                     | `MCP_AGENT_TOOL_SAVE_RECORDING_PATH`           | Optional: Path to save recordings. If not set, recording to file is disabled even if `ENABLE_RECORDING=true`. | ` ` (empty, recording disabled)   |
 |                                     | `MCP_AGENT_TOOL_HISTORY_PATH`                  | Optional: Directory to save agent history JSON files. If not set, history saving is disabled.              | ` ` (empty, history saving disabled) |
-|                                     | `MCP_AGENT_TOOL_GENERATE_GIF`                  | Enable generation of agent history GIF (`true`/`false`). Requires `MCP_AGENT_TOOL_HISTORY_PATH` to be set. | `false`                           |
 | **Research Tool (MCP_RESEARCH_TOOL_)** |                                             | Settings for the `run_deep_research` tool.                                                                 |                                   |
 |                                     | `MCP_RESEARCH_TOOL_MAX_PARALLEL_BROWSERS`      | Max parallel browser instances for deep research.                                                          | `3`                               |
 |                                     | `MCP_RESEARCH_TOOL_SAVE_DIR`                   | Optional: Base directory to save research artifacts. Task ID will be appended. If not set, operates in memory-only mode. | `None`                           |
