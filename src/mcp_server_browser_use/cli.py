@@ -91,38 +91,27 @@ async def cli_ask_human_callback(query: str, browser_context: Any) -> Dict[str, 
     response_text = typer.prompt(typer.style("Your response", fg=typer.colors.CYAN))
     return {"response": response_text}
 
-def cli_on_step_callback(agent_instance: BrowserUseAgent): # Changed signature to match AgentHookFunc
+def cli_on_step_callback(browser_state: BrowserState, agent_output: AgentOutput, step_num: int):
     """CLI callback for BrowserUseAgent steps."""
-    # agent_instance.state.history.last_step() gives AgentHistory object
-    # agent_instance.state.last_result gives ActionResult
-    # agent_instance.state.n_steps gives current step number
-
-    last_step_history = agent_instance.state.history.last_step()
-    if not last_step_history:
-        return
-
-    step_num = agent_instance.state.n_steps
     print(typer.style(f"\n--- Step {step_num} ---", fg=typer.colors.BLUE, bold=True))
-
-    if last_step_history.current_state:
-        print(typer.style("🧠 Agent State (Thought):", fg=typer.colors.MAGENTA))
-        print(last_step_history.current_state)
-
-    if last_step_history.action_model: # action_model is List[ActionModel]
+    # Print current state if available
+    if hasattr(agent_output, "current_state") and agent_output.current_state:
+        print(typer.style("🧠 Agent State:", fg=typer.colors.MAGENTA))
+        print(agent_output.current_state)
+    # Print actions
+    if hasattr(agent_output, "action") and agent_output.action:
         print(typer.style("🎬 Actions:", fg=typer.colors.GREEN))
-        for action_item in last_step_history.action_model:
-            # ActionModel is a Pydantic model, iterate its fields
-            action_details = []
-            for action_name, params in action_item.model_dump(exclude_unset=True, exclude_none=True).items():
-                if params is not None and action_name != "action_type": # action_type is often redundant here
-                     action_details.append(f"{action_name}: {params}")
-            if action_details:
-                print(f"  - {', '.join(action_details)}")
-            else: # Fallback if model_dump is empty for some reason
-                print(f"  - {action_item}")
-
-    if last_step_history.action_result and last_step_history.action_result.observation:
-        obs = last_step_history.action_result.observation
+        for action in agent_output.action:
+            # Try to get action_type and action_input if present, else print the action itself
+            action_type = getattr(action, "action_type", None)
+            action_input = getattr(action, "action_input", None)
+            if action_type is not None or action_input is not None:
+                print(f"  - {action_type or 'Unknown action'}: {action_input or ''}")
+            else:
+                print(f"  - {action}")
+    # Optionally print observation if present in browser_state
+    if hasattr(browser_state, "observation") and browser_state.observation:
+        obs = browser_state.observation
         print(typer.style("👀 Observation:", fg=typer.colors.CYAN))
         print(str(obs)[:200] + "..." if obs and len(str(obs)) > 200 else obs)
 
