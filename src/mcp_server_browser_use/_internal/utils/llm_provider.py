@@ -248,8 +248,8 @@ def get_llm_model(provider: str, **kwargs):
             return ChatOllama(
                 model=kwargs.get("model_name", "qwen2.5:7b"),
                 temperature=kwargs.get("temperature", 0.0),
-                num_ctx=kwargs.get("num_ctx", 32000),
-                num_predict=kwargs.get("num_predict", 1024),
+                num_ctx=kwargs.get("ollama_num_ctx", 32000),
+                num_predict=kwargs.get("ollama_num_predict", 1024),
                 base_url=base_url,
             )
     elif provider == "azure_openai":
